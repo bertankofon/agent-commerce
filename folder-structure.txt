@@ -1,0 +1,19 @@
+agent-commerce/
+│
+├── agents/            # Python agent runtime (ChaosChain + ElizaOS)
+│   ├── __init__.py
+│   ├── chaos_agent.py
+│   ├── eliza_agent.py
+│   ├── negotiation.py
+│   ├── prompts.py
+│   ├── tools.py
+│   └── run_agent.py
+│
+├── backend/           # Node.js API
+│   └── index.ts
+│
+├── frontend/          # Next.js frontend
+│   └── (boilerplate)
+│
+└── shared/
+    └── types.ts

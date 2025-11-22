@@ -1,0 +1,10 @@
+# AI Framework
+eliza-sdk>=0.1.0
+
+# Blockchain SDK
+chaoschain-sdk>=0.1.0
+
+# Core dependencies
+python-dotenv>=1.0.0
+requests>=2.31.0
+
