@@ -22,7 +22,8 @@ class ProductsOperations:
         negotiation_percentage: int,
         description: Optional[str] = None,
         currency: str = "USDC",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        images: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         Create a new product record in the products table.
@@ -36,6 +37,7 @@ class ProductsOperations:
             description: Product description
             currency: Currency code (default: USDC)
             metadata: Additional metadata (JSON)
+            images: List of image URLs (up to 3)
         
         Returns:
             Created product record
@@ -55,6 +57,9 @@ class ProductsOperations:
             
             if metadata:
                 data["metadata"] = metadata
+            
+            if images:
+                data["images"] = images
             
             response = self.client.table(self.table).insert(data).execute()
             

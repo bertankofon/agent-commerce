@@ -10,6 +10,7 @@ interface Product {
   currency: string;
   description?: string;
   metadata?: any;
+  images?: string[]; // Array of image URLs
 }
 
 interface ProductsModalProps {
@@ -77,18 +78,60 @@ export default function ProductsModal({ isOpen, onClose, agentName, products }: 
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {products.map((product) => (
+              {products.map((product) => {
+                // Debug: Log product to see images
+                console.log("Product data:", product);
+                console.log("Product images:", product.images);
+                
+                return (
                 <div
                   key={product.id}
                   className="border-2 border-cyan-400/30 rounded-xl p-4 bg-black/40 hover:border-cyan-400/60 transition-all"
                 >
                   {/* Product Image (if available) */}
-                  {product.metadata?.imageUrl && (
+                  {(product.images && product.images.length > 0) ? (
+                    <div className="mb-3">
+                      {/* Show first image as main */}
+                      <img
+                        src={product.images[0]}
+                        alt={product.name}
+                        className="w-full h-32 object-cover rounded-lg"
+                        onError={(e) => {
+                          console.error("Image load error:", product.images[0]);
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                      {/* Show thumbnails if more than 1 image */}
+                      {product.images.length > 1 && (
+                        <div className="flex gap-1 mt-1">
+                          {product.images.slice(1).map((img, idx) => (
+                            <img
+                              key={idx}
+                              src={img}
+                              alt={`${product.name} - ${idx + 2}`}
+                              className="w-10 h-10 object-cover rounded"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : product.metadata?.imageUrl ? (
                     <img
                       src={product.metadata.imageUrl}
                       alt={product.name}
                       className="w-full h-32 object-cover rounded-lg mb-3"
+                      onError={(e) => {
+                        console.error("Metadata image load error:", product.metadata?.imageUrl);
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
                     />
+                  ) : (
+                    <div className="w-full h-32 bg-gradient-to-br from-cyan-400/10 to-purple-400/10 rounded-lg mb-3 flex items-center justify-center">
+                      <span className="text-cyan-400/40 text-4xl">📦</span>
+                    </div>
                   )}
 
                   {/* Product Name */}
@@ -122,11 +165,6 @@ export default function ProductsModal({ isOpen, onClose, agentName, products }: 
                         {product.stock} units
                       </span>
                     </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-cyan-400/60 text-sm">Max Discount:</span>
-                      <span className="text-cyan-300">{product.negotiation_percentage}%</span>
-                    </div>
                   </div>
 
                   {/* Action Button */}
@@ -134,7 +172,7 @@ export default function ProductsModal({ isOpen, onClose, agentName, products }: 
                     Negotiate
                   </button>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>

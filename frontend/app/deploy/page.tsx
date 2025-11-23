@@ -13,14 +13,16 @@ interface Product {
   stock: number;
   maxDiscount: number;
   imageUrl?: string;
+  images?: File[]; // Up to 3 images
+  imagePreviews?: string[]; // Preview URLs
 }
 
 interface SearchItem {
   id: string;
-  productName: string;
-  targetPrice: number;
+  category: string;
   maxBudget: number;
-  quantity: number;
+  priority: 'must-have' | 'nice-to-have';
+  description: string;
 }
 
 export default function DeployPage() {
@@ -36,12 +38,36 @@ export default function DeployPage() {
   const [agentDomain, setAgentDomain] = useState("");
   const [agentDescription, setAgentDescription] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [selectedPresetAvatar, setSelectedPresetAvatar] = useState<string>("");
+  const [avatarPreview, setAvatarPreview] = useState<string>("");
+  
+  // Preset avatar options
+  const presetAvatars = [
+    { id: "robot", emoji: "🤖", label: "Robot" },
+    { id: "store", emoji: "🏪", label: "Store" },
+    { id: "ai", emoji: "🧠", label: "AI Brain" },
+    { id: "diamond", emoji: "💎", label: "Diamond" },
+    { id: "rocket", emoji: "🚀", label: "Rocket" },
+    { id: "star", emoji: "⭐", label: "Star" },
+  ];
   
   // Merchant
   const [products, setProducts] = useState<Product[]>([]);
   
   // Client
   const [searchItems, setSearchItems] = useState<SearchItem[]>([]);
+  
+  const categories = [
+    "Electronics",
+    "Fashion & Apparel",
+    "Home & Living",
+    "Sports & Outdoors",
+    "Books & Media",
+    "Health & Beauty",
+    "Toys & Games",
+    "Automotive",
+    "Other"
+  ];
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -63,6 +89,8 @@ export default function DeployPage() {
         price: 1000,
         stock: 100,
         maxDiscount: 15,
+        images: [],
+        imagePreviews: [],
       },
     ]);
   }
@@ -77,15 +105,92 @@ export default function DeployPage() {
     );
   }
 
+  function handleProductImageAdd(productId: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    const product = products.find(p => p.id === productId);
+    
+    if (!product) return;
+    
+    const currentImages = product.images || [];
+    const remainingSlots = 3 - currentImages.length;
+    const filesToAdd = files.slice(0, remainingSlots);
+    
+    if (filesToAdd.length === 0) {
+      setError("Maximum 3 images per product");
+      return;
+    }
+    
+    const newImages = [...currentImages, ...filesToAdd];
+    const newPreviews = [...(product.imagePreviews || [])];
+    
+    // Create previews for new images
+    filesToAdd.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProducts(prev => prev.map(p => {
+          if (p.id === productId) {
+            return {
+              ...p,
+              imagePreviews: [...(p.imagePreviews || []), reader.result as string]
+            };
+          }
+          return p;
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    updateProduct(productId, 'images', newImages);
+  }
+
+  function handleProductImageRemove(productId: string, imageIndex: number) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    const newImages = (product.images || []).filter((_, i) => i !== imageIndex);
+    const newPreviews = (product.imagePreviews || []).filter((_, i) => i !== imageIndex);
+    
+    setProducts(prev => prev.map(p => {
+      if (p.id === productId) {
+        return {
+          ...p,
+          images: newImages,
+          imagePreviews: newPreviews
+        };
+      }
+      return p;
+    }));
+  }
+
+  function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      setSelectedPresetAvatar(""); // Clear preset selection
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function handlePresetAvatarSelect(avatarId: string, emoji: string) {
+    setSelectedPresetAvatar(avatarId);
+    setSelectedImage(null); // Clear file selection
+    setAvatarPreview(emoji);
+  }
+
   function addSearchItem() {
     setSearchItems([
       ...searchItems,
       {
         id: Date.now().toString(),
-        productName: "",
-        targetPrice: 800,
+        category: "Electronics",
         maxBudget: 1000,
-        quantity: 1,
+        priority: "must-have",
+        description: "",
       },
     ]);
   }
@@ -134,11 +239,28 @@ export default function DeployPage() {
       // Image if selected
       if (selectedImage) {
         formData.append("image", selectedImage);
+      } else if (selectedPresetAvatar) {
+        // Send preset avatar emoji as metadata
+        formData.append("preset_avatar", presetAvatars.find(a => a.id === selectedPresetAvatar)?.emoji || "");
       }
       
-      // Products/search items as JSON metadata (for future use)
+      // Products/search items as JSON metadata
       if (agentType === "merchant") {
-        formData.append("products_json", JSON.stringify(products));
+        // Prepare products data without images (images will be uploaded separately)
+        const productsData = products.map(p => ({
+          name: p.name,
+          price: p.price,
+          stock: p.stock,
+          maxDiscount: p.maxDiscount
+        }));
+        formData.append("products_json", JSON.stringify(productsData));
+        
+        // Add product images
+        products.forEach((product, idx) => {
+          (product.images || []).forEach((image, imgIdx) => {
+            formData.append(`product_${idx}_image_${imgIdx}`, image);
+          });
+        });
       } else {
         formData.append("search_items_json", JSON.stringify(searchItems));
       }
@@ -390,17 +512,46 @@ export default function DeployPage() {
 
                   <div>
                     <label className="block text-cyan-300/70 text-sm mb-2 font-semibold">
-                      AVATAR IMAGE (OPTIONAL)
+                      AVATAR
                     </label>
+                    
+                    {/* Preview */}
+                    {avatarPreview && (
+                      <div className="mb-3 flex justify-center">
+                        <div className="w-20 h-20 rounded-full bg-cyan-400/20 flex items-center justify-center text-4xl border-2 border-cyan-400/40">
+                          {avatarPreview}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Preset Avatars */}
+                    <div className="grid grid-cols-6 gap-2 mb-3">
+                      {presetAvatars.map((avatar) => (
+                        <button
+                          key={avatar.id}
+                          type="button"
+                          onClick={() => handlePresetAvatarSelect(avatar.id, avatar.emoji)}
+                          className={`p-3 rounded-xl border-2 transition-all ${
+                            selectedPresetAvatar === avatar.id
+                              ? 'border-cyan-400 bg-cyan-400/20'
+                              : 'border-cyan-400/30 hover:border-cyan-400/60'
+                          }`}
+                        >
+                          <div className="text-2xl">{avatar.emoji}</div>
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* Custom Upload */}
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) => setSelectedImage(e.target.files?.[0] || null)}
+                      onChange={handleAvatarFileChange}
                       className="w-full px-4 py-3 bg-black/50 border-2 border-cyan-400/30 rounded-xl text-cyan-100 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-400/20 file:text-cyan-400 hover:file:bg-cyan-400/30 focus:border-cyan-400 transition-all"
                     />
                     {selectedImage && (
                       <p className="text-cyan-400/60 text-xs mt-2">
-                        Selected: {selectedImage.name}
+                        Custom: {selectedImage.name}
                       </p>
                     )}
                   </div>
@@ -511,23 +662,50 @@ export default function DeployPage() {
                                 min="0"
                               />
                             </div>
-                            <div>
+                            
+                            {/* Product Images Upload (up to 3) */}
+                            <div className="col-span-2">
                               <label className="block text-cyan-300/60 text-xs mb-1">
-                                IMAGE URL (OPT)
+                                IMAGES (UP TO 3)
                               </label>
-                              <input
-                                type="text"
-                                value={product.imageUrl || ""}
-                                onChange={(e) =>
-                                  updateProduct(
-                                    product.id,
-                                    "imageUrl",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
-                                placeholder="https://..."
-                              />
+                              
+                              {/* Image Previews */}
+                              {(product.imagePreviews || []).length > 0 && (
+                                <div className="flex gap-2 mb-2">
+                                  {product.imagePreviews?.map((preview, imgIdx) => (
+                                    <div key={imgIdx} className="relative w-16 h-16">
+                                      <img
+                                        src={preview}
+                                        alt={`Product ${idx + 1} - Image ${imgIdx + 1}`}
+                                        className="w-full h-full object-cover rounded-lg border border-cyan-400/30"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleProductImageRemove(product.id, imgIdx)}
+                                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs hover:bg-red-600 transition-all"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              
+                              {/* Upload Button */}
+                              {(product.images || []).length < 3 && (
+                                <label className="block">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={(e) => handleProductImageAdd(product.id, e)}
+                                    className="hidden"
+                                  />
+                                  <div className="px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-400/60 text-sm hover:border-cyan-400 cursor-pointer transition-all text-center">
+                                    + Add Images ({(product.images || []).length}/3)
+                                  </div>
+                                </label>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -542,12 +720,12 @@ export default function DeployPage() {
                   </div>
                 )}
 
-                {/* Client Search Items */}
+                {/* Client Shopping Preferences */}
                 {agentType === "client" && (
                   <div className="border-2 border-cyan-400/20 rounded-2xl p-6 bg-black/50 mb-6">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-cyan-300/80 font-bold text-sm">
-                        WHAT ARE YOU LOOKING FOR?
+                        SHOPPING PREFERENCES
                       </h3>
                       <button
                         onClick={addSearchItem}
@@ -565,7 +743,7 @@ export default function DeployPage() {
                         >
                           <div className="flex justify-between items-center mb-3">
                             <span className="text-cyan-400/60 text-xs font-bold">
-                              ITEM {idx + 1}
+                              PREFERENCE {idx + 1}
                             </span>
                             <button
                               onClick={() => removeSearchItem(item.id)}
@@ -575,76 +753,89 @@ export default function DeployPage() {
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2">
+                          <div className="space-y-3">
+                            {/* Category */}
+                            <div>
                               <label className="block text-cyan-300/60 text-xs mb-1">
-                                PRODUCT NAME
+                                CATEGORY
                               </label>
-                              <input
-                                type="text"
-                                value={item.productName}
+                              <select
+                                value={item.category}
                                 onChange={(e) =>
                                   updateSearchItem(
                                     item.id,
-                                    "productName",
+                                    "category",
                                     e.target.value
                                   )
                                 }
                                 className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
-                                placeholder="MacBook Pro"
-                              />
+                              >
+                                {categories.map((cat) => (
+                                  <option key={cat} value={cat}>
+                                    {cat}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
+
+                            {/* Description */}
                             <div>
                               <label className="block text-cyan-300/60 text-xs mb-1">
-                                TARGET PRICE ($)
+                                DESCRIPTION
                               </label>
-                              <input
-                                type="number"
-                                value={item.targetPrice}
+                              <textarea
+                                value={item.description}
                                 onChange={(e) =>
                                   updateSearchItem(
                                     item.id,
-                                    "targetPrice",
-                                    Number(e.target.value)
+                                    "description",
+                                    e.target.value
                                   )
                                 }
-                                className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
+                                className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all resize-none"
+                                placeholder="e.g., Latest laptop for coding and gaming"
+                                rows={2}
                               />
                             </div>
-                            <div>
-                              <label className="block text-cyan-300/60 text-xs mb-1">
-                                MAX BUDGET ($)
-                              </label>
-                              <input
-                                type="number"
-                                value={item.maxBudget}
-                                onChange={(e) =>
-                                  updateSearchItem(
-                                    item.id,
-                                    "maxBudget",
-                                    Number(e.target.value)
-                                  )
-                                }
-                                className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <label className="block text-cyan-300/60 text-xs mb-1">
-                                QUANTITY
-                              </label>
-                              <input
-                                type="number"
-                                value={item.quantity}
-                                onChange={(e) =>
-                                  updateSearchItem(
-                                    item.id,
-                                    "quantity",
-                                    Number(e.target.value)
-                                  )
-                                }
-                                className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
-                                min="1"
-                              />
+
+                            {/* Budget & Priority */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-cyan-300/60 text-xs mb-1">
+                                  MAX BUDGET ($)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={item.maxBudget}
+                                  onChange={(e) =>
+                                    updateSearchItem(
+                                      item.id,
+                                      "maxBudget",
+                                      Number(e.target.value)
+                                    )
+                                  }
+                                  className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-cyan-300/60 text-xs mb-1">
+                                  PRIORITY
+                                </label>
+                                <select
+                                  value={item.priority}
+                                  onChange={(e) =>
+                                    updateSearchItem(
+                                      item.id,
+                                      "priority",
+                                      e.target.value as 'must-have' | 'nice-to-have'
+                                    )
+                                  }
+                                  className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
+                                >
+                                  <option value="must-have">Must Have</option>
+                                  <option value="nice-to-have">Nice to Have</option>
+                                </select>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -652,7 +843,7 @@ export default function DeployPage() {
 
                       {searchItems.length === 0 && (
                         <div className="text-center py-8 text-cyan-400/40 text-sm">
-                          Click + ADD to specify what you're looking for
+                          Click + ADD to set your shopping preferences
                         </div>
                       )}
                     </div>

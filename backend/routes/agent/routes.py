@@ -1,7 +1,8 @@
 import os
 import logging
 import asyncio
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+import re
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
 from typing import Optional, List
 from .models import AgentDeployResponse
 from database.supabase.operations import AgentsOperations, ProductsOperations
@@ -162,10 +163,12 @@ async def upload_image_to_supabase(image_file: UploadFile, agent_id: str, bucket
 
 @router.post("/deploy-agent", response_model=AgentDeployResponse)
 async def deploy_agent(
+    request: Request,
     agent_type: str = Form(...),
     name: str = Form(...),
     domain: str = Form(...),
     image: Optional[UploadFile] = File(None),
+    preset_avatar: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     products_json: Optional[str] = Form(None),
     search_items_json: Optional[str] = Form(None),
@@ -180,8 +183,11 @@ async def deploy_agent(
 ):
     """
     Create an agent in Supabase and upload image if provided.
+    Also handles product images (up to 3 per product).
     
     Accepts form data with optional image file upload and ChaosChain configuration.
+    
+    Product images are sent as: product_0_image_0, product_0_image_1, etc.
     
     ChaosChain Options:
     - agent_role: Optional. One of: "SERVER", "CLIENT", "VALIDATOR", "WORKER", "VERIFIER", "ORCHESTRATOR". Default: "SERVER"
@@ -344,28 +350,78 @@ async def deploy_agent(
         
         logger.info(f"Created agent record with ID: {db_agent_id}")
         
-        # Upload image to Supabase Storage if provided
+        # Upload avatar image to Supabase Storage if provided
         avatar_url = None
         if image:
-            logger.info("Uploading image to Supabase Storage...")
+            logger.info("Uploading custom avatar to Supabase Storage...")
             avatar_url = await upload_image_to_supabase(image, str(db_agent_id))
-            logger.info(f"Image uploaded successfully: {avatar_url}")
+            logger.info(f"Avatar uploaded successfully: {avatar_url}")
             
             # Update agent record with avatar URL
             agents_ops.update_agent_avatar_url(
                 agent_id=db_agent_id,
                 avatar_url=avatar_url
             )
+        elif preset_avatar:
+            # Use preset avatar emoji as avatar_url
+            logger.info(f"Using preset avatar: {preset_avatar}")
+            agents_ops.update_agent_avatar_url(
+                agent_id=db_agent_id,
+                avatar_url=preset_avatar  # Store emoji directly
+            )
+            avatar_url = preset_avatar
         
         # Insert products into products table if merchant
         if agent_type_lower == "merchant" and products_data:
             logger.info(f"Inserting {len(products_data)} products for merchant agent {db_agent_id}")
             try:
-                created_products = products_ops.create_products_batch(
-                    agent_id=db_agent_id,
-                    products=products_data
-                )
-                logger.info(f"Successfully inserted {len(created_products)} products")
+                # Parse product images from FormData
+                form_data = await request.form()
+                product_images_map = {}  # {product_idx: [image_urls]}
+                
+                # Extract all product images from form
+                for key, value in form_data.items():
+                    # Match pattern: product_0_image_0, product_1_image_1, etc.
+                    match = re.match(r'product_(\d+)_image_(\d+)', key)
+                    if match and isinstance(value, UploadFile):
+                        product_idx = int(match.group(1))
+                        image_idx = int(match.group(2))
+                        
+                        if product_idx not in product_images_map:
+                            product_images_map[product_idx] = []
+                        
+                        # Upload image to Supabase Storage
+                        try:
+                            image_url = await upload_image_to_supabase(
+                                value, 
+                                f"{db_agent_id}/product_{product_idx}"
+                            )
+                            product_images_map[product_idx].append(image_url)
+                            logger.info(f"Uploaded product {product_idx} image {image_idx}: {image_url}")
+                        except Exception as e:
+                            logger.warning(f"Failed to upload product {product_idx} image {image_idx}: {str(e)}")
+                
+                # Create products with images
+                created_products = []
+                for idx, product in enumerate(products_data):
+                    # Add images array to product data
+                    product_with_images = {
+                        **product,
+                        "images": product_images_map.get(idx, [])
+                    }
+                    
+                    # Insert product
+                    created_product = products_ops.create_product(
+                        agent_id=db_agent_id,
+                        name=product["name"],
+                        price=str(product["price"]),
+                        stock=product["stock"],
+                        negotiation_percentage=product["maxDiscount"],
+                        images=product_images_map.get(idx, [])
+                    )
+                    created_products.append(created_product)
+                
+                logger.info(f"Successfully inserted {len(created_products)} products with images")
             except Exception as e:
                 logger.error(f"Failed to insert products: {str(e)}")
                 # Don't fail the whole deployment if products insert fails
