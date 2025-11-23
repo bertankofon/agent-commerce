@@ -22,7 +22,12 @@ class AgentsOperations:
         transaction_hash: Optional[str] = None,
         public_address: Optional[str] = None,
         encrypted_private_key: Optional[str] = None,
-        agent_type: Optional[str] = None
+        agent_type: Optional[str] = None,
+        name: Optional[str] = None,
+        domain: Optional[str] = None,
+        description: Optional[str] = None,
+        owner: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Create a new agent record in the agents table.
@@ -35,6 +40,11 @@ class AgentsOperations:
             public_address: Public Ethereum address of the agent wallet
             encrypted_private_key: Encrypted private key of the agent wallet
             agent_type: Agent type ("client" or "merchant")
+            name: Agent name
+            domain: Agent domain
+            description: Agent description
+            owner: Owner wallet address or identifier
+            metadata: Additional metadata (JSON)
         
         Returns:
             Created agent record
@@ -63,6 +73,22 @@ class AgentsOperations:
             
             if agent_type:
                 data["agent_type"] = agent_type
+            
+            # Add agent details
+            if name:
+                data["name"] = name
+            
+            if domain:
+                data["domain"] = domain
+            
+            if description:
+                data["description"] = description
+            
+            if owner:
+                data["owner"] = owner
+            
+            if metadata:
+                data["metadata"] = metadata
             
             response = self.client.table(self.table).insert(data).execute()
             
