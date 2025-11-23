@@ -1,10 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePrivy } from '@privy-io/react-auth';
 import { getCategoryColor } from "../lib/categories";
-import { getUserByPrivyId } from "../lib/auth";
-import { getUserNegotiations } from "../lib/api";
 
 // Get backend URL from environment variable
 // Supports multiple possible variable names
@@ -83,39 +80,24 @@ export default function NegotiationModal({
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Negotiation[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [databaseUserId, setDatabaseUserId] = useState<string | null>(null);
 
-  const { user } = usePrivy();
   const categoryColor = getCategoryColor(merchantCategory);
 
-  // Load database user ID when modal opens
+  // Load negotiation history when modal opens
   useEffect(() => {
-    if (isOpen && user?.id) {
-      const loadDatabaseUserId = async () => {
-        try {
-          const userRecord = await getUserByPrivyId(user.id);
-          setDatabaseUserId(userRecord.id);
-        } catch (err) {
-          console.error("Failed to load database user ID:", err);
-        }
-      };
-      loadDatabaseUserId();
-    }
-  }, [isOpen, user]);
-
-  // Load negotiation history when modal opens and databaseUserId is available
-  useEffect(() => {
-    if (isOpen && databaseUserId) {
+    if (isOpen && productId) {
       loadNegotiationHistory();
     }
-  }, [isOpen, databaseUserId]);
+  }, [isOpen, productId]);
 
   const loadNegotiationHistory = async () => {
-    if (!databaseUserId) return;
-    
     try {
       setLoadingHistory(true);
-      const data = await getUserNegotiations(databaseUserId);
+      // Use Next.js API route for direct Supabase access
+      const response = await fetch(
+        `/api/negotiations/product/${productId}`
+      );
+      const data = await response.json();
       
       if (data.success) {
         setHistory(data.negotiations || []);
@@ -161,18 +143,11 @@ export default function NegotiationModal({
       }
 
       // Reload history and show the latest negotiation
-      if (databaseUserId) {
-        await loadNegotiationHistory();
-        
-        // Fetch the updated history to get the latest negotiation
-        try {
-          const data = await getUserNegotiations(databaseUserId);
-          if (data.success && data.negotiations && data.negotiations.length > 0) {
-            setNegotiationResult(data.negotiations[0]); // Most recent
-          }
-        } catch (err) {
-          console.error("Failed to fetch latest negotiation:", err);
-        }
+      await loadNegotiationHistory();
+      
+      // Find the latest negotiation from the response
+      if (data.negotiation) {
+        setNegotiationResult(data.negotiation);
       }
     } catch (err: any) {
       console.error("Negotiation error:", err);

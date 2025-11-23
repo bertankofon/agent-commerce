@@ -67,6 +67,13 @@ export default function MarketPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  
+  // Fund Modal State
+  const [showFundModal, setShowFundModal] = useState(false);
+  const [fundingAgent, setFundingAgent] = useState<Agent | null>(null);
+  const [fundAmount, setFundAmount] = useState("1.0");
+  const [fundingInProgress, setFundingInProgress] = useState(false);
+  const [fundError, setFundError] = useState("");
 
   useEffect(() => {
     if (!authenticated) {
@@ -179,6 +186,97 @@ export default function MarketPage() {
     setShowProductsModal(false);
     setSelectedAgent(null);
     setProducts([]);
+  }
+
+  async function handleFundAgent() {
+    if (!fundingAgent || !user?.wallet?.address) return;
+    
+    setFundingInProgress(true);
+    setFundError("");
+    
+    try {
+      const amount = parseFloat(fundAmount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error("Invalid amount");
+      }
+      
+      // Get agent's wallet address
+      const response = await fetch(`http://localhost:8000/agent/${fundingAgent.id}`);
+      const data = await response.json();
+      
+      const walletAddress = data.public_address || data.wallet_address;
+      
+      if (!walletAddress) {
+        throw new Error("Agent wallet address not found");
+      }
+      
+      // USDC Contract Address on Base Sepolia
+      const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+      const BASE_SEPOLIA_CHAIN_ID = "0x14a34"; // 84532 in hex
+      
+      // Switch to Base Sepolia network if needed
+      try {
+        await (window as any).ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: BASE_SEPOLIA_CHAIN_ID }],
+        });
+      } catch (switchError: any) {
+        // This error code indicates that the chain has not been added to MetaMask
+        if (switchError.code === 4902) {
+          try {
+            await (window as any).ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: BASE_SEPOLIA_CHAIN_ID,
+                chainName: "Base Sepolia",
+                nativeCurrency: {
+                  name: "Ethereum",
+                  symbol: "ETH",
+                  decimals: 18
+                },
+                rpcUrls: ["https://sepolia.base.org"],
+                blockExplorerUrls: ["https://sepolia.basescan.org"]
+              }],
+            });
+          } catch (addError) {
+            throw new Error("Failed to add Base Sepolia network to MetaMask");
+          }
+        } else {
+          throw switchError;
+        }
+      }
+      
+      // Convert amount to USDC decimals (6 decimals)
+      const amountInUSDC = Math.floor(amount * 1_000_000).toString();
+      
+      // ERC-20 Transfer function signature
+      const transferData = 
+        "0xa9059cbb" + // transfer(address,uint256)
+        walletAddress.slice(2).padStart(64, "0") + // to address (remove 0x, pad to 32 bytes)
+        parseInt(amountInUSDC).toString(16).padStart(64, "0"); // amount in hex, padded to 32 bytes
+      
+      // Request transaction from MetaMask
+      const txHash = await (window as any).ethereum.request({
+        method: "eth_sendTransaction",
+        params: [{
+          from: user.wallet.address,
+          to: USDC_ADDRESS,
+          data: transferData,
+          chainId: BASE_SEPOLIA_CHAIN_ID
+        }]
+      });
+      
+      alert(`✅ Successfully funded ${fundingAgent.name} with ${amount} USDC!\n\nTransaction: ${txHash}\nAgent Wallet: ${walletAddress}`);
+      
+      setShowFundModal(false);
+      setFundingAgent(null);
+      setFundAmount("1.0");
+    } catch (err: any) {
+      console.error("Failed to fund agent:", err);
+      setFundError(err.message || err.toString() || "Failed to fund agent");
+    } finally {
+      setFundingInProgress(false);
+    }
   }
 
   function getStatusColor(status: string) {
@@ -640,6 +738,17 @@ export default function MarketPage() {
                                 View Products
                               </button>
                             )}
+                            {agent.agent_type === 'client' && (
+                              <button
+                                onClick={() => {
+                                  setFundingAgent(agent);
+                                  setShowFundModal(true);
+                                }}
+                                className="px-4 py-2 border border-green-400/50 rounded-lg text-green-400 hover:border-green-400 hover:bg-green-400/10 transition-all text-sm font-semibold"
+                              >
+                                💰 Fund
+                              </button>
+                            )}
                             <button
                               onClick={() => handleToggleStatus(agent.id, agent.status)}
                               className="px-4 py-2 border border-cyan-400/50 rounded-lg text-cyan-400 hover:border-cyan-400 transition-all text-sm"
@@ -719,6 +828,112 @@ export default function MarketPage() {
           )}
         </div>
       </div>
+
+      {/* Fund Modal */}
+      {showFundModal && fundingAgent && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => {
+            setShowFundModal(false);
+            setFundingAgent(null);
+            setFundAmount("1.0");
+            setFundError("");
+          }}
+        >
+          <div
+            className="relative max-w-md w-full border-2 border-green-400/40 rounded-3xl backdrop-blur-md bg-black/95 shadow-2xl shadow-green-500/20 m-4 p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setShowFundModal(false);
+                setFundingAgent(null);
+                setFundAmount("1.0");
+                setFundError("");
+              }}
+              className="absolute top-4 right-4 text-cyan-400/60 hover:text-cyan-400 transition-all text-2xl"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-2xl font-bold text-green-400 mb-2">💰 Fund Agent</h2>
+            <p className="text-cyan-300/70 text-sm mb-4">
+              Send USDC to <span className="text-cyan-400 font-semibold">{fundingAgent.name}</span>
+            </p>
+            <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg px-3 py-2 mb-6">
+              <p className="text-blue-400 text-xs flex items-center gap-2">
+                <span>🔵</span>
+                <span>Network: <span className="font-semibold">Base Sepolia</span></span>
+              </p>
+              <p className="text-blue-400/70 text-xs mt-1 ml-5">
+                Token: USDC (0x036C...CF7e)
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-cyan-400/80 text-sm block mb-2">
+                  Amount (USDC)
+                </label>
+                <input
+                  type="number"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value)}
+                  step="0.1"
+                  min="0.1"
+                  className="w-full px-4 py-3 bg-black/50 border-2 border-green-400/30 rounded-xl text-green-100 focus:border-green-400 transition-all text-lg font-semibold"
+                  placeholder="1.0"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => setFundAmount("1.0")}
+                    className="px-3 py-1 border border-green-400/30 rounded-lg text-green-400/70 hover:border-green-400 hover:text-green-400 transition-all text-xs"
+                  >
+                    1 USDC
+                  </button>
+                  <button
+                    onClick={() => setFundAmount("5.0")}
+                    className="px-3 py-1 border border-green-400/30 rounded-lg text-green-400/70 hover:border-green-400 hover:text-green-400 transition-all text-xs"
+                  >
+                    5 USDC
+                  </button>
+                  <button
+                    onClick={() => setFundAmount("10.0")}
+                    className="px-3 py-1 border border-green-400/30 rounded-lg text-green-400/70 hover:border-green-400 hover:text-green-400 transition-all text-xs"
+                  >
+                    10 USDC
+                  </button>
+                </div>
+              </div>
+
+              {fundError && (
+                <div className="border border-red-400/50 bg-red-400/10 text-red-400 px-4 py-3 rounded-xl text-sm">
+                  ⚠️ {fundError}
+                </div>
+              )}
+
+              <button
+                onClick={handleFundAgent}
+                disabled={fundingInProgress}
+                className="w-full px-6 py-4 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-2 border-green-400/50 rounded-xl text-green-400 hover:border-green-400 hover:from-green-500/30 hover:to-emerald-500/30 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {fundingInProgress ? (
+                  <>
+                    <span className="inline-block animate-spin mr-2">⚡</span>
+                    Sending...
+                  </>
+                ) : (
+                  `Send ${fundAmount} USDC`
+                )}
+              </button>
+
+              <div className="text-xs text-cyan-400/40 border border-cyan-400/20 rounded-lg p-3 bg-black/20">
+                <strong>Note:</strong> USDC will be sent to the agent's wallet address on Base Sepolia testnet.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Products Modal */}
       <ProductsModal

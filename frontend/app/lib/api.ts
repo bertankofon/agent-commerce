@@ -162,3 +162,37 @@ export async function getUserNegotiations(userId: string) {
   
   return res.json();
 }
+
+// NEW: Next.js API routes for negotiations (direct Supabase access)
+export async function getProductNegotiations(productId: string) {
+  const res = await fetch(`/api/negotiations/product/${productId}`);
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `API error: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+export async function getAgentNegotiations(agentId: string) {
+  const res = await fetch(`/api/negotiations/agent/${agentId}`);
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `API error: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+export async function getSessionNegotiations(sessionId: string) {
+  const res = await fetch(`/api/negotiations/session/${sessionId}`);
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `API error: ${res.status}`);
+  }
+  
+  return res.json();
+}
