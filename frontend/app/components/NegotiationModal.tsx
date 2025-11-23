@@ -427,7 +427,7 @@ export default function NegotiationModal({
                   <div className="flex justify-between text-xs">
                     <span className="text-cyan-400/70">{formatPrice(neg.initial_price)}</span>
                     {neg.final_price && (
-                      <span className={`font-semibold ${isPaymentSuccessful ? 'text-green-400' : 'text-green-400'}`}>
+                      <span className="text-green-400 font-semibold">
                         → {formatPrice(neg.final_price)}
                       </span>
                     )}
