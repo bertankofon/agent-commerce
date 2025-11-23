@@ -38,21 +38,24 @@ Allowed MIME types: image/* (or leave empty for all)
 3. Copy and paste this **exact SQL**:
 
 ```sql
--- Allow public to read product images
-CREATE POLICY IF NOT EXISTS "Public can read products"
+-- Drop existing policies first (safe to run multiple times)
+DROP POLICY IF EXISTS "Public can read products" ON storage.objects;
+DROP POLICY IF EXISTS "Service role can manage products" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated can upload products" ON storage.objects;
+
+-- Create policies
+CREATE POLICY "Public can read products"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'products');
 
--- Allow service role (backend) to manage all
-CREATE POLICY IF NOT EXISTS "Service role can manage products"
+CREATE POLICY "Service role can manage products"
 ON storage.objects FOR ALL
 TO service_role
 USING (bucket_id = 'products')
 WITH CHECK (bucket_id = 'products');
 
--- Allow authenticated users to upload
-CREATE POLICY IF NOT EXISTS "Authenticated can upload products"
+CREATE POLICY "Authenticated can upload products"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'products');
@@ -61,6 +64,8 @@ WITH CHECK (bucket_id = 'products');
 4. Click **"Run"** (or press Ctrl/Cmd + Enter)
 
 **✅ Policies created!**
+
+**Note:** If you see "policy already exists" error, the DROP commands will fix it. Just run the whole SQL again.
 
 ---
 
