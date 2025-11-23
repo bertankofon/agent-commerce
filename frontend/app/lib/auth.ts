@@ -3,7 +3,6 @@ const API_BASE = 'http://localhost:8000';
 export interface UserLoginData {
   privy_user_id: string;
   wallet_address: string;
-  user_type: 'merchant' | 'client';
   email?: string;
   name?: string;
 }
@@ -12,7 +11,6 @@ export interface User {
   id: string;
   privy_user_id: string;
   wallet_address: string;
-  user_type: 'merchant' | 'client';
   email?: string;
   name?: string;
   created_at: string;

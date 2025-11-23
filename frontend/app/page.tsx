@@ -33,7 +33,6 @@ export default function Home() {
           await loginOrRegisterUser({
             privy_user_id: privyUserId,
             wallet_address: walletAddress,
-            user_type: 'merchant', // Default, can be changed later
             email,
             name,
           });
@@ -126,13 +125,22 @@ export default function Home() {
                 </button>
               ) : (
                 <>
-                  <Link
-                    href="/deploy"
-                    className="group relative px-20 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
-                  >
-                    <span className="relative z-10">DEPLOY AGENT</span>
-                    <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  </Link>
+                  <div className="flex gap-4">
+                    <Link
+                      href="/deploy"
+                      className="group relative px-12 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
+                    >
+                      <span className="relative z-10">DEPLOY AGENT</span>
+                      <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </Link>
+                    <Link
+                      href="/market"
+                      className="group relative px-12 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
+                    >
+                      <span className="relative z-10">MARKET</span>
+                      <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </Link>
+                  </div>
                   {user?.wallet?.address && (
                     <p className="text-cyan-400/60 text-sm">
                       {user.wallet.address.slice(0, 6)}...{user.wallet.address.slice(-4)}

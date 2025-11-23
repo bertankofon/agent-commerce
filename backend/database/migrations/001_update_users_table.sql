@@ -33,7 +33,6 @@ COMMENT ON TABLE users IS 'Users table integrated with Privy authentication';
 -- 8. Add comments to columns
 COMMENT ON COLUMN users.privy_user_id IS 'Unique Privy user ID from authentication';
 COMMENT ON COLUMN users.wallet_address IS 'User wallet address from Privy';
-COMMENT ON COLUMN users.user_type IS 'User type: merchant or client';
 COMMENT ON COLUMN users.email IS 'User email from Privy login (email or Google)';
 COMMENT ON COLUMN users.name IS 'User name from Privy (Google or other providers)';
 
@@ -43,7 +42,6 @@ COMMENT ON COLUMN users.name IS 'User name from Privy (Google or other providers
 --   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 --   privy_user_id TEXT UNIQUE NOT NULL,
 --   wallet_address TEXT NOT NULL,
---   user_type TEXT NOT NULL DEFAULT 'merchant',
 --   email TEXT,
 --   name TEXT
 -- )

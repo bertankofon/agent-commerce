@@ -2,7 +2,7 @@ import os
 import logging
 import asyncio
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from typing import Optional
+from typing import Optional, List
 from .models import AgentDeployResponse
 from database.supabase.operations import AgentsOperations, ProductsOperations
 from database.supabase.client import get_supabase_client
@@ -409,4 +409,201 @@ async def deploy_agent(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+
+
+@router.get("/my-agents")
+async def get_my_agents(owner: str):
+    """
+    Get all agents owned by a specific user.
+    
+    Args:
+        owner: Owner wallet address or Privy user ID
+    
+    Returns:
+        List of agents with product counts
+    """
+    try:
+        agents_ops = AgentsOperations()
+        agents = agents_ops.get_agents_by_owner(owner)
+        
+        # Enrich with product counts
+        from database.supabase.operations import ProductsOperations
+        products_ops = ProductsOperations()
+        
+        enriched_agents = []
+        for agent in agents:
+            # Get product count for this agent
+            try:
+                products = products_ops.get_products_by_agent(agent["id"])
+                product_count = len(products)
+            except Exception as e:
+                logger.warning(f"Failed to get products for agent {agent['id']}: {str(e)}")
+                product_count = 0
+            
+            enriched_agents.append({
+                **agent,
+                "products_count": product_count
+            })
+        
+        return {"agents": enriched_agents}
+        
+    except Exception as e:
+        logger.error(f"Failed to get user agents: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.get("/list")
+async def list_live_agents():
+    """
+    Get all live agents for market display.
+    Only returns merchant agents with status='live'.
+    
+    Returns:
+        List of live agents with product counts
+    """
+    try:
+        agents_ops = AgentsOperations()
+        agents = agents_ops.get_live_agents()
+        
+        # Enrich with product counts
+        from database.supabase.operations import ProductsOperations
+        products_ops = ProductsOperations()
+        
+        enriched_agents = []
+        for agent in agents:
+            # Get product count for this agent
+            try:
+                products = products_ops.get_products_by_agent(agent["id"])
+                product_count = len(products)
+            except Exception as e:
+                logger.warning(f"Failed to get products for agent {agent['id']}: {str(e)}")
+                product_count = 0
+            
+            enriched_agents.append({
+                **agent,
+                "products_count": product_count
+            })
+        
+        return {"agents": enriched_agents}
+        
+    except Exception as e:
+        logger.error(f"Failed to get live agents: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.get("/{agent_id}")
+async def get_agent(agent_id: str):
+    """
+    Get single agent details by ID.
+    
+    Args:
+        agent_id: UUID of the agent
+    
+    Returns:
+        Agent record with product count
+    """
+    try:
+        from uuid import UUID
+        agents_ops = AgentsOperations()
+        agent = agents_ops.get_agent_by_id(UUID(agent_id))
+        
+        if not agent:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent {agent_id} not found"
+            )
+        
+        # Get product count
+        from database.supabase.operations import ProductsOperations
+        products_ops = ProductsOperations()
+        try:
+            products = products_ops.get_products_by_agent(agent_id)
+            product_count = len(products)
+        except Exception as e:
+            logger.warning(f"Failed to get products for agent {agent_id}: {str(e)}")
+            product_count = 0
+        
+        return {
+            **agent,
+            "products_count": product_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get agent: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.get("/{agent_id}/products")
+async def get_agent_products(agent_id: str):
+    """
+    Get all products for a specific agent.
+    
+    Args:
+        agent_id: UUID of the agent
+    
+    Returns:
+        List of products
+    """
+    try:
+        from database.supabase.operations import ProductsOperations
+        products_ops = ProductsOperations()
+        
+        products = products_ops.get_products_by_agent(agent_id)
+        
+        return {"products": products}
+        
+    except Exception as e:
+        logger.error(f"Failed to get agent products: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.patch("/{agent_id}/status")
+async def update_agent_status(agent_id: str, status: str):
+    """
+    Update agent status (live, paused, draft).
+    
+    Args:
+        agent_id: UUID of the agent
+        status: New status ('live', 'paused', or 'draft')
+    
+    Returns:
+        Updated agent record
+    """
+    try:
+        from uuid import UUID
+        
+        if status not in ["live", "paused", "draft"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Status must be 'live', 'paused', or 'draft'"
+            )
+        
+        agents_ops = AgentsOperations()
+        updated_agent = agents_ops.update_agent_status(UUID(agent_id), status)
+        
+        return updated_agent
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update agent status: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
 

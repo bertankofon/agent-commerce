@@ -18,7 +18,6 @@ class UsersOperations:
         self,
         privy_user_id: str,
         wallet_address: str,
-        user_type: str = "merchant",
         email: Optional[str] = None,
         name: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -29,7 +28,6 @@ class UsersOperations:
         Args:
             privy_user_id: Privy user ID (unique identifier)
             wallet_address: User's wallet address from Privy
-            user_type: User type ("merchant" or "client")
             email: User's email (from Privy login)
             name: User's name (from Google/other providers)
         
@@ -46,7 +44,6 @@ class UsersOperations:
                 return self.update_user(
                     user_id=existing_user["id"],
                     wallet_address=wallet_address,
-                    user_type=user_type,
                     email=email,
                     name=name
                 )
@@ -54,8 +51,7 @@ class UsersOperations:
             # Create new user
             data = {
                 "privy_user_id": privy_user_id,
-                "wallet_address": wallet_address,
-                "user_type": user_type
+                "wallet_address": wallet_address
             }
             
             if email:
@@ -152,7 +148,6 @@ class UsersOperations:
         self,
         user_id: UUID,
         wallet_address: Optional[str] = None,
-        user_type: Optional[str] = None,
         email: Optional[str] = None,
         name: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -162,7 +157,6 @@ class UsersOperations:
         Args:
             user_id: UUID of the user
             wallet_address: Updated wallet address
-            user_type: Updated user type
             email: Updated email
             name: Updated name
         
@@ -174,9 +168,6 @@ class UsersOperations:
             
             if wallet_address:
                 update_data["wallet_address"] = wallet_address
-            
-            if user_type:
-                update_data["user_type"] = user_type
             
             if email:
                 update_data["email"] = email

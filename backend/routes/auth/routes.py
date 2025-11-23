@@ -22,35 +22,25 @@ async def login_or_register_user(request: UserLoginRequest):
         User record from database
     """
     try:
-        # Validate user_type
-        if request.user_type not in ["merchant", "client"]:
-            raise HTTPException(
-                status_code=400,
-                detail="user_type must be either 'merchant' or 'client'"
-            )
-        
         users_ops = UsersOperations()
         
         # Create or update user
         user_record = users_ops.create_or_update_user(
             privy_user_id=request.privy_user_id,
             wallet_address=request.wallet_address,
-            user_type=request.user_type,
             email=request.email,
             name=request.name
         )
         
         logger.info(
             f"User logged in/registered: {user_record['id']}, "
-            f"Privy ID: {request.privy_user_id}, "
-            f"Type: {request.user_type}"
+            f"Privy ID: {request.privy_user_id}"
         )
         
         return UserResponse(
             id=user_record["id"],
             privy_user_id=user_record["privy_user_id"],
             wallet_address=user_record["wallet_address"],
-            user_type=user_record["user_type"],
             email=user_record.get("email"),
             name=user_record.get("name"),
             created_at=user_record["created_at"]
@@ -91,7 +81,6 @@ async def get_user_by_privy_id(privy_user_id: str):
             id=user_record["id"],
             privy_user_id=user_record["privy_user_id"],
             wallet_address=user_record["wallet_address"],
-            user_type=user_record["user_type"],
             email=user_record.get("email"),
             name=user_record.get("name"),
             created_at=user_record["created_at"]

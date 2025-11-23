@@ -183,4 +183,89 @@ class AgentsOperations:
         except Exception as e:
             logger.error(f"Error listing agents: {str(e)}")
             raise
+    
+    def get_agents_by_owner(self, owner: str, limit: int = 100) -> list[Dict[str, Any]]:
+        """
+        Get all agents owned by a specific user.
+        
+        Args:
+            owner: Owner wallet address or Privy user ID
+            limit: Maximum number of agents to return
+        
+        Returns:
+            List of agent records
+        """
+        try:
+            response = self.client.table(self.table)\
+                .select("*")\
+                .eq("owner", owner)\
+                .order("created_at", desc=True)\
+                .limit(limit)\
+                .execute()
+            
+            return response.data or []
+            
+        except Exception as e:
+            logger.error(f"Error getting agents for owner {owner}: {str(e)}")
+            raise
+    
+    def get_live_agents(self, limit: int = 100) -> list[Dict[str, Any]]:
+        """
+        Get all live agents (for market display).
+        Only returns agents with status='live' and agent_type='merchant'.
+        
+        Args:
+            limit: Maximum number of agents to return
+        
+        Returns:
+            List of live agent records
+        """
+        try:
+            response = self.client.table(self.table)\
+                .select("*")\
+                .eq("status", "live")\
+                .eq("agent_type", "merchant")\
+                .order("created_at", desc=True)\
+                .limit(limit)\
+                .execute()
+            
+            return response.data or []
+            
+        except Exception as e:
+            logger.error(f"Error getting live agents: {str(e)}")
+            raise
+    
+    def update_agent_status(
+        self,
+        agent_id: UUID,
+        status: str
+    ) -> Dict[str, Any]:
+        """
+        Update agent status (live, paused, draft).
+        
+        Args:
+            agent_id: UUID of the agent
+            status: New status ('live', 'paused', or 'draft')
+        
+        Returns:
+            Updated agent record
+        """
+        try:
+            if status not in ["live", "paused", "draft"]:
+                raise ValueError(f"Invalid status: {status}. Must be 'live', 'paused', or 'draft'")
+            
+            response = self.client.table(self.table)\
+                .update({"status": status})\
+                .eq("id", str(agent_id))\
+                .execute()
+            
+            if not response.data:
+                raise ValueError(f"Agent {agent_id} not found")
+            
+            logger.info(f"Updated agent {agent_id} status to: {status}")
+            return response.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error updating agent status {agent_id}: {str(e)}")
+            raise
 
