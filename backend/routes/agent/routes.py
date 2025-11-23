@@ -9,6 +9,7 @@ from database.supabase.operations import AgentsOperations, ProductsOperations
 from database.supabase.client import get_supabase_client
 from utils.wallet import create_wallet, encrypt_pk, send_eth_to_wallet
 from utils.chaoschain import create_chaoschain_agent
+from utils.image_upload import upload_product_image
 from chaoschain_sdk import AgentRole
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -377,73 +378,47 @@ async def deploy_agent(
         if agent_type_lower == "merchant" and products_data:
             logger.info(f"Inserting {len(products_data)} products for merchant agent {db_agent_id}")
             try:
-                # Parse product images from FormData
+                # Get form data to extract product images
                 form_data = await request.form()
-                product_images_map = {}  # {product_idx: [image_urls]}
                 
-                # Extract all product images from form
-                # Support both formats: product_image_0 (single) and product_0_image_0 (multiple)
-                product_id_map = {}  # Map product_id to index
-                for key, value in form_data.items():
-                    # Try to match product_image_{index}_id pattern first (for product ID mapping)
-                    id_match = re.match(r'product_image_(\d+)_id', key)
-                    if id_match:
-                        product_idx = int(id_match.group(1))
-                        product_id = str(value) if not isinstance(value, UploadFile) else None
-                        if product_id:
-                            product_id_map[product_idx] = product_id
-                        continue
-                    
-                    # Match pattern: product_image_0, product_image_1, etc. (single image per product)
-                    single_match = re.match(r'product_image_(\d+)', key)
-                    if single_match and isinstance(value, UploadFile):
-                        product_idx = int(single_match.group(1))
-                        image_idx = 0
-                    # Also support: product_0_image_0, product_1_image_1, etc. (multiple images)
-                    else:
-                        multi_match = re.match(r'product_(\d+)_image_(\d+)', key)
-                        if multi_match and isinstance(value, UploadFile):
-                            product_idx = int(multi_match.group(1))
-                            image_idx = int(multi_match.group(2))
-                        else:
-                            continue
-                        
-                        if product_idx not in product_images_map:
-                            product_images_map[product_idx] = []
-                        
-                        # Upload image to Supabase Storage
-                        try:
-                            image_url = await upload_image_to_supabase(
-                                value, 
-                                f"{db_agent_id}/product_{product_idx}",
-                                bucket_name="products"  # Use products bucket
-                            )
-                            product_images_map[product_idx].append(image_url)
-                            logger.info(f"Uploaded product {product_idx} image {image_idx}: {image_url}")
-                        except Exception as e:
-                            logger.warning(f"Failed to upload product {product_idx} image {image_idx}: {str(e)}")
-                
-                # Create products with images
+                # Create products
                 created_products = []
                 for idx, product in enumerate(products_data):
-                    # Add images array to product data
-                    product_with_images = {
-                        **product,
-                        "images": product_images_map.get(idx, [])
-                    }
+                    # Try to get image for this product (product_image_0, product_image_1, etc.)
+                    image_key = f"product_image_{idx}"
+                    product_image_urls = []
                     
-                    # Insert product
+                    if image_key in form_data:
+                        image_file = form_data[image_key]
+                        if isinstance(image_file, UploadFile) and image_file.filename:
+                            logger.info(f"Found image for product {idx}: {image_file.filename}")
+                            
+                            # Upload image to Supabase Storage
+                            image_url = await upload_product_image(
+                                image_file,
+                                str(db_agent_id),
+                                idx
+                            )
+                            
+                            if image_url:
+                                product_image_urls.append(image_url)
+                                logger.info(f"✓ Product {idx} image uploaded: {image_url}")
+                            else:
+                                logger.warning(f"Failed to upload image for product {idx}")
+                    
+                    # Insert product into database
                     created_product = products_ops.create_product(
                         agent_id=db_agent_id,
                         name=product["name"],
                         price=str(product["price"]),
                         stock=product["stock"],
-                        negotiation_percentage=product["maxDiscount"],
-                        images=product_images_map.get(idx, [])
+                        negotiation_percentage=product.get("maxDiscount", 0),
+                        images=product_image_urls  # Pass image URLs array
                     )
                     created_products.append(created_product)
+                    logger.info(f"✓ Product '{product['name']}' created with {len(product_image_urls)} image(s)")
                 
-                logger.info(f"Successfully inserted {len(created_products)} products with images")
+                logger.info(f"✓ Successfully inserted {len(created_products)} products")
             except Exception as e:
                 logger.error(f"Failed to insert products: {str(e)}")
                 # Don't fail the whole deployment if products insert fails

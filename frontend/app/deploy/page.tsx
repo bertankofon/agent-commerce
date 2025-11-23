@@ -600,89 +600,74 @@ export default function DeployPage() {
                                 min="0"
                               />
                             </div>
+                            {/* Product Image Upload - Simple Method */}
                             <div className="col-span-2">
-                              <label className="block text-cyan-300/60 text-xs mb-2">
-                                PRODUCT IMAGE
+                              <label className="block text-cyan-300/60 text-xs mb-2 font-semibold">
+                                PRODUCT IMAGE (OPTIONAL)
                               </label>
-                              <div className="flex gap-3 items-start">
-                                {/* Image Preview */}
-                                {(product.imageFile || product.imageUrl) && (
-                                  <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-cyan-400/50 shadow-lg shadow-cyan-400/20">
+                              
+                              {/* Show preview if image selected */}
+                              {product.imageFile && (
+                                <div className="mb-3">
+                                  <div className="relative inline-block">
                                     <img
-                                      src={
-                                        product.imageFile
-                                          ? URL.createObjectURL(product.imageFile)
-                                          : product.imageUrl
-                                      }
-                                      alt={product.name || 'Product'}
-                                      className="w-full h-full object-cover"
+                                      src={URL.createObjectURL(product.imageFile)}
+                                      alt="Preview"
+                                      className="w-32 h-32 object-cover rounded-lg border-2 border-cyan-400/50"
                                     />
                                     <button
                                       type="button"
-                                      onClick={(e) => {
-                                        e.preventDefault();
+                                      onClick={() => {
                                         updateProduct(product.id, "imageFile", undefined);
-                                        updateProduct(product.id, "imageUrl", "");
                                       }}
-                                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600 transition-all shadow-lg"
+                                      className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg transition-all"
                                     >
                                       ✕
                                     </button>
                                   </div>
-                                )}
-                                
-                                {/* Upload Button */}
-                                <label 
-                                  htmlFor={`product-image-${product.id}`}
-                                  className="flex-1 cursor-pointer"
-                                >
-                                  <div className="border-2 border-dashed border-cyan-400/30 rounded-lg p-4 hover:border-cyan-400/60 hover:bg-cyan-400/5 transition-all text-center">
-                                    <div className="text-cyan-400/70 text-sm font-semibold">
-                                      📸 {product.imageFile || product.imageUrl ? 'Change' : 'Upload'} Image
-                                    </div>
-                                    <div className="text-cyan-400/40 text-xs mt-1">
-                                      PNG, JPG, WEBP (max 5MB)
-                                    </div>
-                                  </div>
+                                  <p className="text-cyan-400/60 text-xs mt-2">
+                                    {product.imageFile.name} ({(product.imageFile.size / 1024).toFixed(1)} KB)
+                                  </p>
+                                </div>
+                              )}
+                              
+                              {/* Upload button */}
+                              {!product.imageFile && (
+                                <div>
                                   <input
-                                    id={`product-image-${product.id}`}
                                     type="file"
-                                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                                    id={`img-${product.id}`}
+                                    accept="image/*"
                                     onChange={(e) => {
                                       const file = e.target.files?.[0];
                                       if (file) {
-                                        console.log('File selected:', file.name, file.size);
+                                        // Check file size (5MB max)
                                         if (file.size > 5 * 1024 * 1024) {
-                                          setError("Image size must be less than 5MB");
-                                          e.target.value = '';
+                                          alert("Image must be less than 5MB");
+                                          return;
+                                        }
+                                        // Check file type
+                                        if (!file.type.startsWith('image/')) {
+                                          alert("Please select an image file");
                                           return;
                                         }
                                         updateProduct(product.id, "imageFile", file);
-                                        updateProduct(product.id, "imageUrl", "");
-                                        console.log('Image set for product:', product.id);
                                       }
                                     }}
                                     className="hidden"
                                   />
-                                </label>
-                              </div>
-                            </div>
-                            
-                            {/* URL fallback (hidden by default, can be shown if needed) */}
-                            <div className="col-span-2 hidden">
-                              <label className="block text-cyan-300/60 text-xs mb-1">
-                                OR IMAGE URL
-                              </label>
-                              <input
-                                type="text"
-                                value={product.imageUrl || ""}
-                                onChange={(e) => {
-                                  updateProduct(product.id, "imageUrl", e.target.value);
-                                  updateProduct(product.id, "imageFile", undefined);
-                                }}
-                                className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
-                                placeholder="https://..."
-                              />
+                                  <label
+                                    htmlFor={`img-${product.id}`}
+                                    className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-400/10 border-2 border-cyan-400/40 rounded-xl text-cyan-400 hover:bg-cyan-400/20 hover:border-cyan-400 transition-all cursor-pointer font-semibold text-sm"
+                                  >
+                                    <span className="text-lg">📷</span>
+                                    Choose Image
+                                  </label>
+                                  <p className="text-cyan-400/40 text-xs mt-2">
+                                    Max 5MB • JPG, PNG, WEBP, GIF
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
