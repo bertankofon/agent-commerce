@@ -2,10 +2,53 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePrivy } from '@privy-io/react-auth';
+import { loginOrRegisterUser } from './lib/auth';
 
 export default function Home() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isRegistering, setIsRegistering] = useState(false);
   const { ready, authenticated, login, user } = usePrivy();
+
+  // Auto-register/login user when authenticated
+  useEffect(() => {
+    const registerUser = async () => {
+      if (authenticated && user && !isRegistering) {
+        try {
+          setIsRegistering(true);
+          
+          // Get user data from Privy
+          const privyUserId = user.id;
+          const walletAddress = user.wallet?.address;
+          
+          if (!walletAddress) {
+            console.error('No wallet address found');
+            return;
+          }
+          
+          // Extract email and name from Privy user object
+          const email = user.email?.address || user.google?.email || undefined;
+          const name = user.google?.name || undefined;
+          
+          // Register or login user to backend
+          await loginOrRegisterUser({
+            privy_user_id: privyUserId,
+            wallet_address: walletAddress,
+            user_type: 'merchant', // Default, can be changed later
+            email,
+            name,
+          });
+          
+          console.log('User registered/logged in successfully');
+        } catch (error) {
+          console.error('Failed to register/login user:', error);
+        } finally {
+          setIsRegistering(false);
+        }
+      }
+    };
+    
+    registerUser();
+  }, [authenticated, user, isRegistering]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {

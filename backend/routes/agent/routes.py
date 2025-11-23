@@ -4,7 +4,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import Optional
 from .models import AgentDeployResponse
-from database.supabase.operations import AgentsOperations
+from database.supabase.operations import AgentsOperations, ProductsOperations
 from database.supabase.client import get_supabase_client
 from utils.wallet import create_wallet, encrypt_pk, send_eth_to_wallet
 from utils.chaoschain import create_chaoschain_agent
@@ -170,6 +170,8 @@ async def deploy_agent(
     products_json: Optional[str] = Form(None),
     search_items_json: Optional[str] = Form(None),
     owner: Optional[str] = Form(None),
+    user_wallet_address: Optional[str] = Form(None),  # Privy user wallet
+    user_id: Optional[str] = Form(None),  # Privy user ID
     # ChaosChain configuration options
     agent_role: Optional[str] = Form(None),
     enable_payments: Optional[str] = Form(None),
@@ -303,6 +305,7 @@ async def deploy_agent(
         # Create agent record in Supabase
         logger.info("Creating agent record in Supabase...")
         agents_ops = AgentsOperations()
+        products_ops = ProductsOperations()
         
         # Parse products/search items JSON if provided
         products_data = None
@@ -323,27 +326,10 @@ async def deploy_agent(
                 logger.warning(f"Failed to parse search_items_json: {str(e)}")
         
         # Prepare metadata for the agent (including ChaosChain config)
-        metadata = {
-            "user_wallet_address": user_wallet_address,
-            "user_id": user_id,
-            "products": products_json,
-            "search_items": search_items_json,
-            "description": description,
-            "chaoschain_config": {
-                "agent_role": str(parsed_agent_role.value if hasattr(parsed_agent_role, 'value') else parsed_agent_role),
-                "enable_payments": enable_payments_bool,
-                "enable_process_integrity": enable_process_integrity_bool,
-                "enable_ap2": enable_ap2_bool,
-                "agent_id": chaoschain_result["agent_id"],
-                "transaction_hash": chaoschain_result["transaction_hash"]
-            }
-        }
+        # Note: metadata column doesn't exist in current schema, we'll use products table instead
         
-        # Add products or search items to metadata
-        if products_data:
-            metadata["products"] = products_data
-        if search_items_data:
-            metadata["search_items"] = search_items_data
+        # Determine owner: use provided owner, or wallet address, or user_id
+        agent_owner = owner.strip() if owner else (user_wallet_address or user_id)
         
         agent_record = agents_ops.create_agent(
             chaoschain_agent_id=chaoschain_result["agent_id"],
@@ -352,10 +338,7 @@ async def deploy_agent(
             encrypted_private_key=encrypted_private_key,
             agent_type=agent_type_lower,
             name=str(name).strip(),
-            domain=agent_domain,
-            description=description.strip() if description else None,
-            owner=owner.strip() if owner else None,
-            metadata=metadata
+            owner=agent_owner
         )
         db_agent_id = agent_record["id"]
         
@@ -368,43 +351,47 @@ async def deploy_agent(
             avatar_url = await upload_image_to_supabase(image, str(db_agent_id))
             logger.info(f"Image uploaded successfully: {avatar_url}")
             
-            # Update agent record with avatar URL in the avatar_url field
+            # Update agent record with avatar URL
             agents_ops.update_agent_avatar_url(
                 agent_id=db_agent_id,
                 avatar_url=avatar_url
             )
-            
-            # Also update metadata to keep it in sync (if metadata column exists)
+        
+        # Insert products into products table if merchant
+        if agent_type_lower == "merchant" and products_data:
+            logger.info(f"Inserting {len(products_data)} products for merchant agent {db_agent_id}")
             try:
-                agents_ops.update_agent_metadata(
+                created_products = products_ops.create_products_batch(
                     agent_id=db_agent_id,
-                    metadata={
-                        **metadata,
-                        "avatar_url": avatar_url
-                    }
+                    products=products_data
                 )
+                logger.info(f"Successfully inserted {len(created_products)} products")
             except Exception as e:
-                logger.warning(f"Could not update metadata (column may not exist): {str(e)}")
+                logger.error(f"Failed to insert products: {str(e)}")
+                # Don't fail the whole deployment if products insert fails
+                # Agent is already created, products can be added later
         
         logger.info(
             f"Agent created successfully. "
             f"DB ID: {db_agent_id}, "
             f"Name: {name}, "
-            f"Type: {agent_type_lower}, "
-            f"Domain: {agent_domain}"
+            f"Type: {agent_type_lower}"
         )
         
         # Return response with all agent details
         response_metadata = {
             "name": str(name).strip(),
-            "domain": agent_domain,
             "type": agent_type_lower,
-            **metadata
+            "agent_id": chaoschain_result["agent_id"],
+            "public_address": chaoschain_result["public_address"],
+            "transaction_hash": chaoschain_result["transaction_hash"]
         }
-        if description:
-            response_metadata["description"] = description.strip()
         if owner:
             response_metadata["owner"] = owner.strip()
+        if user_wallet_address:
+            response_metadata["user_wallet_address"] = user_wallet_address
+        if user_id:
+            response_metadata["user_id"] = user_id
         
         return AgentDeployResponse(
             agent_id=str(db_agent_id),

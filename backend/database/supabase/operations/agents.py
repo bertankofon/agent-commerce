@@ -24,10 +24,7 @@ class AgentsOperations:
         encrypted_private_key: Optional[str] = None,
         agent_type: Optional[str] = None,
         name: Optional[str] = None,
-        domain: Optional[str] = None,
-        description: Optional[str] = None,
-        owner: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        owner: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new agent record in the agents table.
@@ -41,10 +38,7 @@ class AgentsOperations:
             encrypted_private_key: Encrypted private key of the agent wallet
             agent_type: Agent type ("client" or "merchant")
             name: Agent name
-            domain: Agent domain
-            description: Agent description
             owner: Owner wallet address or identifier
-            metadata: Additional metadata (JSON)
         
         Returns:
             Created agent record
@@ -78,17 +72,8 @@ class AgentsOperations:
             if name:
                 data["name"] = name
             
-            if domain:
-                data["domain"] = domain
-            
-            if description:
-                data["description"] = description
-            
             if owner:
                 data["owner"] = owner
-            
-            if metadata:
-                data["metadata"] = metadata
             
             response = self.client.table(self.table).insert(data).execute()
             
@@ -132,40 +117,18 @@ class AgentsOperations:
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Update agent metadata.
+        Update agent metadata - DEPRECATED: metadata column doesn't exist in current schema.
+        This function is kept for backwards compatibility but does nothing.
         
         Args:
             agent_id: UUID of the agent
-            metadata: Updated metadata (stored in metadata column if it exists)
+            metadata: Metadata (ignored)
         
         Returns:
-            Updated agent record
+            Current agent record
         """
-        try:
-            # Try to update metadata column, but don't fail if it doesn't exist
-            update_data = {}
-            if metadata:
-                # Check if metadata column exists, otherwise skip
-                update_data["metadata"] = metadata
-            
-            if not update_data:
-                logger.warning(f"No metadata to update for agent {agent_id}")
-                return self.get_agent_by_id(agent_id) or {}
-            
-            response = self.client.table(self.table)\
-                .update(update_data)\
-                .eq("id", str(agent_id))\
-                .execute()
-            
-            if not response.data:
-                raise ValueError(f"Agent {agent_id} not found")
-            
-            logger.info(f"Updated agent metadata for ID: {agent_id}")
-            return response.data[0]
-            
-        except Exception as e:
-            logger.error(f"Error updating agent {agent_id}: {str(e)}")
-            raise
+        logger.warning(f"update_agent_metadata called but metadata column doesn't exist. Returning current agent.")
+        return self.get_agent_by_id(agent_id) or {}
     
     def update_agent_avatar_url(
         self,

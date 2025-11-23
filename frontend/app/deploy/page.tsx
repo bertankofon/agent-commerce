@@ -204,77 +204,77 @@ export default function DeployPage() {
         </div>
 
         {/* Space Background */}
-      <div
-        className="space-bg"
-        style={{
-          transform: `translate(${mousePos.x * 8}px, ${mousePos.y * 8}px)`,
-          transition: "transform 0.3s ease-out",
-        }}
-      >
-        <div className="perspective-grid"></div>
-        <div className="stars"></div>
         <div
-          className="floating-orb orb-1"
+          className="space-bg"
           style={{
-            transform: `translate(${mousePos.x * 25}px, ${mousePos.y * 25}px)`,
-            transition: "transform 0.5s ease-out",
+            transform: `translate(${mousePos.x * 8}px, ${mousePos.y * 8}px)`,
+            transition: "transform 0.3s ease-out",
           }}
-        ></div>
-        <div
-          className="floating-orb orb-2"
-          style={{
-            transform: `translate(${-mousePos.x * 35}px, ${-mousePos.y * 35}px)`,
-            transition: "transform 0.5s ease-out",
-          }}
-        ></div>
-      </div>
-
-      {/* Content */}
-      <div className="relative z-10 min-h-screen p-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Back Button */}
-          <Link
-            href="/"
-            className="inline-flex items-center text-cyan-400/60 hover:text-cyan-400 mb-8 transition-colors"
-          >
-            <span className="mr-2">←</span>
-            <span>Back</span>
-          </Link>
-
-          {/* Main Container */}
+        >
+          <div className="perspective-grid"></div>
+          <div className="stars"></div>
           <div
-            className="border-2 border-cyan-400/30 rounded-3xl p-8 backdrop-blur-sm bg-black/40 shadow-2xl shadow-cyan-500/20"
+            className="floating-orb orb-1"
             style={{
-              transform: `perspective(1000px) rotateY(${mousePos.x * 2}deg) rotateX(${-mousePos.y * 2}deg)`,
-              transition: "transform 0.3s ease-out",
+              transform: `translate(${mousePos.x * 25}px, ${mousePos.y * 25}px)`,
+              transition: "transform 0.5s ease-out",
             }}
-          >
-            {/* Title */}
-            <h1 className="text-4xl font-bold text-center mb-8 neon-text">
-              DEPLOY AGENT
-            </h1>
+          ></div>
+          <div
+            className="floating-orb orb-2"
+            style={{
+              transform: `translate(${-mousePos.x * 35}px, ${-mousePos.y * 35}px)`,
+              transition: "transform 0.5s ease-out",
+            }}
+          ></div>
+        </div>
 
-            {/* Success Message */}
-            {success && (
-              <div className="border-2 border-cyan-400 rounded-2xl p-6 mb-8 bg-cyan-400/10 text-center">
-                <div className="text-5xl mb-3">✓</div>
-                <p className="text-cyan-400 text-xl font-semibold">
-                  AGENT DEPLOYED
-                </p>
-                <p className="text-cyan-300/60 text-sm mt-2">Redirecting...</p>
-              </div>
-            )}
+        {/* Content */}
+        <div className="relative z-10 min-h-screen p-8">
+          <div className="max-w-4xl mx-auto">
+            {/* Back Button */}
+            <Link
+              href="/"
+              className="inline-flex items-center text-cyan-400/60 hover:text-cyan-400 mb-8 transition-colors"
+            >
+              <span className="mr-2">←</span>
+              <span>Back</span>
+            </Link>
 
-            {/* Error */}
-            {error && (
-              <div className="border-2 border-cyan-400 rounded-2xl p-4 mb-6 bg-cyan-400/10">
-                <p className="text-cyan-400 text-center font-semibold">
-                  {error}
-                </p>
-              </div>
-            )}
+            {/* Main Container */}
+            <div
+              className="border-2 border-cyan-400/30 rounded-3xl p-8 backdrop-blur-sm bg-black/40 shadow-2xl shadow-cyan-500/20"
+              style={{
+                transform: `perspective(1000px) rotateY(${mousePos.x * 2}deg) rotateX(${-mousePos.y * 2}deg)`,
+                transition: "transform 0.3s ease-out",
+              }}
+            >
+              {/* Title */}
+              <h1 className="text-4xl font-bold text-center mb-8 neon-text">
+                DEPLOY AGENT
+              </h1>
 
-            {!success && (
+              {/* Success Message */}
+              {success && (
+                <div className="border-2 border-cyan-400 rounded-2xl p-6 mb-8 bg-cyan-400/10 text-center">
+                  <div className="text-5xl mb-3">✓</div>
+                  <p className="text-cyan-400 text-xl font-semibold">
+                    AGENT DEPLOYED
+                  </p>
+                  <p className="text-cyan-300/60 text-sm mt-2">Redirecting...</p>
+                </div>
+              )}
+
+              {/* Error */}
+              {error && (
+                <div className="border-2 border-cyan-400 rounded-2xl p-4 mb-6 bg-cyan-400/10">
+                  <p className="text-cyan-400 text-center font-semibold">
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              {!success && (
               <>
                 {/* Type Selector */}
                 <div className="grid grid-cols-2 gap-6 mb-8">
@@ -669,6 +669,7 @@ export default function DeployPage() {
                 </button>
               </>
             )}
+            </div>
           </div>
         </div>
       </div>

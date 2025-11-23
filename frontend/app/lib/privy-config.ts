@@ -34,5 +34,8 @@ export const privyConfig = {
       },
     },
   },
+  // Disable Solana support - only use EVM/Base Sepolia
+  solana: {
+    enabled: false,
+  },
 };
-
