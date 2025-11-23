@@ -1,9 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePrivy } from '@privy-io/react-auth';
 
 export default function Home() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const { ready, authenticated, login, user } = usePrivy();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -66,14 +68,35 @@ export default function Home() {
             </div>
 
             {/* Enter Button */}
-            <div className="flex justify-center">
-              <Link
-                href="/deploy"
-                className="group relative px-20 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
-              >
-                <span className="relative z-10">DEPLOY AGENT</span>
-                <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              </Link>
+            <div className="flex flex-col items-center gap-4">
+              {!ready ? (
+                <div className="px-20 py-5 border-2 border-cyan-400/30 rounded-full text-cyan-400/50 font-bold text-lg">
+                  LOADING...
+                </div>
+              ) : !authenticated ? (
+                <button
+                  onClick={login}
+                  className="group relative px-20 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
+                >
+                  <span className="relative z-10">CONNECT WALLET</span>
+                  <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </button>
+              ) : (
+                <>
+                  <Link
+                    href="/deploy"
+                    className="group relative px-20 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
+                  >
+                    <span className="relative z-10">DEPLOY AGENT</span>
+                    <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  </Link>
+                  {user?.wallet?.address && (
+                    <p className="text-cyan-400/60 text-sm">
+                      {user.wallet.address.slice(0, 6)}...{user.wallet.address.slice(-4)}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
 

@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createAgent } from "../lib/api";
+import { AuthGuard } from "../lib/auth-guard";
+import { usePrivy } from '@privy-io/react-auth';
 
 interface Product {
   id: string;
@@ -23,6 +25,7 @@ interface SearchItem {
 
 export default function DeployPage() {
   const router = useRouter();
+  const { user, logout } = usePrivy();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -145,6 +148,16 @@ export default function DeployPage() {
         formData.append("description", agentDescription.trim());
       }
 
+      // Add user wallet address
+      if (user?.wallet?.address) {
+        formData.append("user_wallet_address", user.wallet.address);
+      }
+      
+      // Add user ID for Supabase tracking
+      if (user?.id) {
+        formData.append("user_id", user.id);
+      }
+
       const data = await createAgent(formData);
 
       if (data.agent_id) {
@@ -163,8 +176,34 @@ export default function DeployPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Space Background */}
+    <AuthGuard>
+      <div className="min-h-screen bg-black relative overflow-hidden">
+        {/* User Profile - Top Right */}
+        <div className="fixed top-6 right-6 z-50">
+          <div className="border-2 border-cyan-400/30 rounded-xl p-3 bg-black/70 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <div className="text-cyan-400 text-sm">
+                {user?.wallet?.address ? (
+                  <span>
+                    {user.wallet.address.slice(0, 6)}...{user.wallet.address.slice(-4)}
+                  </span>
+                ) : user?.email?.address ? (
+                  <span>{user.email.address}</span>
+                ) : (
+                  <span>User</span>
+                )}
+              </div>
+              <button
+                onClick={() => logout()}
+                className="text-cyan-400/60 hover:text-cyan-400 text-xs px-2 py-1 border border-cyan-400/30 rounded hover:border-cyan-400/60 transition-all"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Space Background */}
       <div
         className="space-bg"
         style={{
@@ -633,6 +672,6 @@ export default function DeployPage() {
           </div>
         </div>
       </div>
-    </div>
+    </AuthGuard>
   );
 }

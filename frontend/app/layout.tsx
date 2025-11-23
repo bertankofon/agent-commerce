@@ -1,10 +1,8 @@
+'use client';
 import type { Metadata } from "next";
 import "./globals.css";
-
-export const metadata: Metadata = {
-  title: "EPOCH",
-  description: "Autonomous AI agents trading on blockchain",
-};
+import { PrivyProvider } from '@privy-io/react-auth';
+import { privyConfig } from './lib/privy-config';
 
 export default function RootLayout({
   children,
@@ -13,7 +11,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <PrivyProvider
+          appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ''}
+          config={privyConfig}
+        >
+          {children}
+        </PrivyProvider>
+      </body>
     </html>
   );
 }

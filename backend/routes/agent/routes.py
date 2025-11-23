@@ -166,6 +166,10 @@ async def deploy_agent(
     name: str = Form(...),
     domain: str = Form(...),
     image: Optional[UploadFile] = File(None),
+    description: Optional[str] = Form(None),
+    products_json: Optional[str] = Form(None),
+    search_items_json: Optional[str] = Form(None),
+    owner: Optional[str] = Form(None),
     # ChaosChain configuration options
     agent_role: Optional[str] = Form(None),
     enable_payments: Optional[str] = Form(None),
@@ -300,11 +304,31 @@ async def deploy_agent(
         logger.info("Creating agent record in Supabase...")
         agents_ops = AgentsOperations()
         
+        # Parse products/search items JSON if provided
+        products_data = None
+        search_items_data = None
+        
+        if products_json:
+            try:
+                import json
+                products_data = json.loads(products_json)
+            except Exception as e:
+                logger.warning(f"Failed to parse products_json: {str(e)}")
+        
+        if search_items_json:
+            try:
+                import json
+                search_items_data = json.loads(search_items_json)
+            except Exception as e:
+                logger.warning(f"Failed to parse search_items_json: {str(e)}")
+        
         # Prepare metadata for the agent (including ChaosChain config)
         metadata = {
-            "name": str(name).strip(),
-            "type": agent_type_lower,
-            "domain": agent_domain,
+            "user_wallet_address": user_wallet_address,
+            "user_id": user_id,
+            "products": products_json,
+            "search_items": search_items_json,
+            "description": description,
             "chaoschain_config": {
                 "agent_role": str(parsed_agent_role.value if hasattr(parsed_agent_role, 'value') else parsed_agent_role),
                 "enable_payments": enable_payments_bool,
@@ -315,12 +339,23 @@ async def deploy_agent(
             }
         }
         
+        # Add products or search items to metadata
+        if products_data:
+            metadata["products"] = products_data
+        if search_items_data:
+            metadata["search_items"] = search_items_data
+        
         agent_record = agents_ops.create_agent(
             chaoschain_agent_id=chaoschain_result["agent_id"],
             transaction_hash=chaoschain_result["transaction_hash"],
             public_address=chaoschain_result["public_address"],
             encrypted_private_key=encrypted_private_key,
-            agent_type=agent_type_lower
+            agent_type=agent_type_lower,
+            name=str(name).strip(),
+            domain=agent_domain,
+            description=description.strip() if description else None,
+            owner=owner.strip() if owner else None,
+            metadata=metadata
         )
         db_agent_id = agent_record["id"]
         
@@ -355,14 +390,27 @@ async def deploy_agent(
             f"Agent created successfully. "
             f"DB ID: {db_agent_id}, "
             f"Name: {name}, "
-            f"Type: {agent_type_lower}"
+            f"Type: {agent_type_lower}, "
+            f"Domain: {agent_domain}"
         )
+        
+        # Return response with all agent details
+        response_metadata = {
+            "name": str(name).strip(),
+            "domain": agent_domain,
+            "type": agent_type_lower,
+            **metadata
+        }
+        if description:
+            response_metadata["description"] = description.strip()
+        if owner:
+            response_metadata["owner"] = owner.strip()
         
         return AgentDeployResponse(
             agent_id=str(db_agent_id),
             status="created",
             agent0_id=None,
-            metadata=metadata,
+            metadata=response_metadata,
             avatar_url=avatar_url
         )
         
