@@ -382,12 +382,31 @@ async def deploy_agent(
                 product_images_map = {}  # {product_idx: [image_urls]}
                 
                 # Extract all product images from form
+                # Support both formats: product_image_0 (single) and product_0_image_0 (multiple)
+                product_id_map = {}  # Map product_id to index
                 for key, value in form_data.items():
-                    # Match pattern: product_0_image_0, product_1_image_1, etc.
-                    match = re.match(r'product_(\d+)_image_(\d+)', key)
-                    if match and isinstance(value, UploadFile):
-                        product_idx = int(match.group(1))
-                        image_idx = int(match.group(2))
+                    # Try to match product_image_{index}_id pattern first (for product ID mapping)
+                    id_match = re.match(r'product_image_(\d+)_id', key)
+                    if id_match:
+                        product_idx = int(id_match.group(1))
+                        product_id = str(value) if not isinstance(value, UploadFile) else None
+                        if product_id:
+                            product_id_map[product_idx] = product_id
+                        continue
+                    
+                    # Match pattern: product_image_0, product_image_1, etc. (single image per product)
+                    single_match = re.match(r'product_image_(\d+)', key)
+                    if single_match and isinstance(value, UploadFile):
+                        product_idx = int(single_match.group(1))
+                        image_idx = 0
+                    # Also support: product_0_image_0, product_1_image_1, etc. (multiple images)
+                    else:
+                        multi_match = re.match(r'product_(\d+)_image_(\d+)', key)
+                        if multi_match and isinstance(value, UploadFile):
+                            product_idx = int(multi_match.group(1))
+                            image_idx = int(multi_match.group(2))
+                        else:
+                            continue
                         
                         if product_idx not in product_images_map:
                             product_images_map[product_idx] = []
@@ -396,7 +415,8 @@ async def deploy_agent(
                         try:
                             image_url = await upload_image_to_supabase(
                                 value, 
-                                f"{db_agent_id}/product_{product_idx}"
+                                f"{db_agent_id}/product_{product_idx}",
+                                bucket_name="products"  # Use products bucket
                             )
                             product_images_map[product_idx].append(image_url)
                             logger.info(f"Uploaded product {product_idx} image {image_idx}: {image_url}")

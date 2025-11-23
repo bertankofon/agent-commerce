@@ -6,6 +6,7 @@ import { createAgent, claimPixels } from "../lib/api";
 import { AuthGuard } from "../lib/auth-guard";
 import { usePrivy } from '@privy-io/react-auth';
 import { CATEGORY_LIST } from "../lib/categories";
+import WalletButton from "../components/WalletButton";
 
 interface Product {
   id: string;
@@ -14,6 +15,7 @@ interface Product {
   stock: number;
   maxDiscount: number;
   imageUrl?: string;
+  imageFile?: File;
 }
 
 interface SearchItem {
@@ -100,7 +102,7 @@ export default function DeployPage() {
     setProducts(products.filter((p) => p.id !== id));
   }
 
-  function updateProduct(id: string, field: keyof Product, value: any) {
+  function updateProduct(id: string, field: string, value: any) {
     setProducts(
       products.map((p) => (p.id === id ? { ...p, [field]: value } : p))
     );
@@ -167,8 +169,25 @@ export default function DeployPage() {
       
       // Products/search items as JSON metadata (for future use)
       if (agentType === "merchant") {
-        formData.append("products_json", JSON.stringify(products));
+        // Prepare products data without File objects (can't be JSON stringified)
+        const productsData = products.map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          stock: p.stock,
+          maxDiscount: p.maxDiscount,
+          imageUrl: p.imageUrl || ""
+        }));
+        formData.append("products_json", JSON.stringify(productsData));
         formData.append("category", merchantCategory);
+        
+        // Append product images separately
+        products.forEach((product, index) => {
+          if (product.imageFile) {
+            formData.append(`product_image_${index}`, product.imageFile);
+            formData.append(`product_image_${index}_id`, product.id);
+          }
+        });
       } else {
         formData.append("search_items_json", JSON.stringify(searchItems));
       }
@@ -232,30 +251,8 @@ export default function DeployPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-black relative overflow-hidden">
-        {/* User Profile - Top Right */}
-        <div className="fixed top-6 right-6 z-50">
-          <div className="border-2 border-cyan-400/30 rounded-xl p-3 bg-black/70 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="text-cyan-400 text-sm">
-                {user?.wallet?.address ? (
-                  <span>
-                    {user.wallet.address.slice(0, 6)}...{user.wallet.address.slice(-4)}
-                  </span>
-                ) : user?.email?.address ? (
-                  <span>{user.email.address}</span>
-                ) : (
-                  <span>User</span>
-                )}
-              </div>
-              <button
-                onClick={() => logout()}
-                className="text-cyan-400/60 hover:text-cyan-400 text-xs px-2 py-1 border border-cyan-400/30 rounded hover:border-cyan-400/60 transition-all"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Wallet Button - Top Right */}
+        <WalletButton />
 
         {/* Space Background */}
         <div
@@ -603,20 +600,86 @@ export default function DeployPage() {
                                 min="0"
                               />
                             </div>
-                            <div>
+                            <div className="col-span-2">
+                              <label className="block text-cyan-300/60 text-xs mb-2">
+                                PRODUCT IMAGE
+                              </label>
+                              <div className="flex gap-3 items-start">
+                                {/* Image Preview */}
+                                {(product.imageFile || product.imageUrl) && (
+                                  <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-cyan-400/50 shadow-lg shadow-cyan-400/20">
+                                    <img
+                                      src={
+                                        product.imageFile
+                                          ? URL.createObjectURL(product.imageFile)
+                                          : product.imageUrl
+                                      }
+                                      alt={product.name || 'Product'}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        updateProduct(product.id, "imageFile", undefined);
+                                        updateProduct(product.id, "imageUrl", "");
+                                      }}
+                                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600 transition-all shadow-lg"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                )}
+                                
+                                {/* Upload Button */}
+                                <label 
+                                  htmlFor={`product-image-${product.id}`}
+                                  className="flex-1 cursor-pointer"
+                                >
+                                  <div className="border-2 border-dashed border-cyan-400/30 rounded-lg p-4 hover:border-cyan-400/60 hover:bg-cyan-400/5 transition-all text-center">
+                                    <div className="text-cyan-400/70 text-sm font-semibold">
+                                      📸 {product.imageFile || product.imageUrl ? 'Change' : 'Upload'} Image
+                                    </div>
+                                    <div className="text-cyan-400/40 text-xs mt-1">
+                                      PNG, JPG, WEBP (max 5MB)
+                                    </div>
+                                  </div>
+                                  <input
+                                    id={`product-image-${product.id}`}
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        console.log('File selected:', file.name, file.size);
+                                        if (file.size > 5 * 1024 * 1024) {
+                                          setError("Image size must be less than 5MB");
+                                          e.target.value = '';
+                                          return;
+                                        }
+                                        updateProduct(product.id, "imageFile", file);
+                                        updateProduct(product.id, "imageUrl", "");
+                                        console.log('Image set for product:', product.id);
+                                      }
+                                    }}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                            
+                            {/* URL fallback (hidden by default, can be shown if needed) */}
+                            <div className="col-span-2 hidden">
                               <label className="block text-cyan-300/60 text-xs mb-1">
-                                IMAGE URL (OPT)
+                                OR IMAGE URL
                               </label>
                               <input
                                 type="text"
                                 value={product.imageUrl || ""}
-                                onChange={(e) =>
-                                  updateProduct(
-                                    product.id,
-                                    "imageUrl",
-                                    e.target.value
-                                  )
-                                }
+                                onChange={(e) => {
+                                  updateProduct(product.id, "imageUrl", e.target.value);
+                                  updateProduct(product.id, "imageFile", undefined);
+                                }}
                                 className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
                                 placeholder="https://..."
                               />

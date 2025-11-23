@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePrivy } from '@privy-io/react-auth';
 import { loginOrRegisterUser } from './lib/auth';
+import WalletButton from './components/WalletButton';
 
 export default function Home() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -62,6 +63,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Wallet Button - Top Right */}
+      <WalletButton />
+      
       {/* Space Background */}
       <div 
         className="space-bg"
@@ -120,7 +124,7 @@ export default function Home() {
                   onClick={login}
                   className="group relative px-20 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
                 >
-                  <span className="relative z-10">CONNECT WALLET</span>
+                  <span className="relative z-10">CONNECT</span>
                   <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </button>
               ) : (
@@ -141,11 +145,6 @@ export default function Home() {
                       <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     </Link>
                   </div>
-                  {user?.wallet?.address && (
-                    <p className="text-cyan-400/60 text-sm">
-                      {user.wallet.address.slice(0, 6)}...{user.wallet.address.slice(-4)}
-                    </p>
-                  )}
                 </>
               )}
             </div>

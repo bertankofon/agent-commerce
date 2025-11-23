@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getMyAgents, getLiveAgents, updateAgentStatus, getAgentProducts, getAllPixelClaims } from "../lib/api";
 import ProductsModal from "../components/ProductsModal";
 import { getCategoryColor, getCategoryById } from "../lib/categories";
+import WalletButton from "../components/WalletButton";
 
 interface Product {
   id: string;
@@ -288,6 +289,9 @@ export default function MarketPage() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Wallet Button - Top Right */}
+      <WalletButton />
+      
       {/* Background */}
       <div
         className="space-bg"
@@ -366,36 +370,52 @@ export default function MarketPage() {
               {activeTab === 'pixel-map' && (
                 <div className="flex flex-col items-center justify-center min-h-[600px]">
                   {/* Deploy Buttons - Above Grid */}
-                  <div className="mb-8 flex gap-4">
+                  <div className="mb-10 flex gap-6">
                     {isSelectingPixels ? (
                       <>
                         <button
                           onClick={handleCancelSelection}
-                          className="px-8 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                          className="group relative px-12 py-5 bg-gradient-to-br from-cyan-400 to-cyan-500 rounded-2xl text-black hover:from-cyan-300 hover:to-cyan-400 transition-all duration-300 font-black text-lg shadow-2xl shadow-cyan-400/60 hover:shadow-cyan-300/80 hover:scale-105 overflow-hidden"
                         >
-                          ✕ Cancel
+                          <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <div className="relative flex items-center justify-center gap-3">
+                            <span className="text-2xl">✕</span>
+                            <span>CANCEL</span>
+                          </div>
                         </button>
                         <button
                           onClick={handleDeployMerchant}
                           disabled={selectedPixels.length === 0}
-                          className="px-10 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                          className="group relative px-14 py-5 bg-gradient-to-br from-cyan-400 to-cyan-500 rounded-2xl text-black hover:from-cyan-300 hover:to-cyan-400 transition-all duration-300 font-black text-lg shadow-2xl shadow-cyan-400/60 hover:shadow-cyan-300/80 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 overflow-hidden"
                         >
-                          🏪 Deploy Store ({selectedPixels.length} pixels)
+                          <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <div className="relative flex items-center justify-center gap-3">
+                            <span className="text-2xl">🏪</span>
+                            <span>DEPLOY STORE ({selectedPixels.length} PIXELS)</span>
+                          </div>
                         </button>
                       </>
                     ) : (
                       <>
                         <button
                           onClick={handleDeployClient}
-                          className="px-10 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                          className="group relative px-14 py-5 bg-gradient-to-br from-cyan-400 to-cyan-500 rounded-2xl text-black hover:from-cyan-300 hover:to-cyan-400 transition-all duration-300 font-black text-lg shadow-2xl shadow-cyan-400/60 hover:shadow-cyan-300/80 hover:scale-105 overflow-hidden"
                         >
-                          👤 Deploy Client
+                          <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <div className="relative flex items-center justify-center gap-3">
+                            <span className="text-2xl">👤</span>
+                            <span>DEPLOY CLIENT</span>
+                          </div>
                         </button>
                         <button
                           onClick={handleStartMerchantDeploy}
-                          className="px-10 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                          className="group relative px-14 py-5 bg-gradient-to-br from-cyan-400 to-cyan-500 rounded-2xl text-black hover:from-cyan-300 hover:to-cyan-400 transition-all duration-300 font-black text-lg shadow-2xl shadow-cyan-400/60 hover:shadow-cyan-300/80 hover:scale-105 overflow-hidden"
                         >
-                          🏪 Deploy Merchant
+                          <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <div className="relative flex items-center justify-center gap-3">
+                            <span className="text-2xl">🏪</span>
+                            <span>DEPLOY MERCHANT</span>
+                          </div>
                         </button>
                       </>
                     )}
@@ -574,15 +594,29 @@ export default function MarketPage() {
                               </div>
                             )}
                             <div>
-                              <h3 className="text-xl font-bold text-cyan-300">{agent.name}</h3>
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-xl font-bold text-cyan-300">{agent.name}</h3>
+                                {/* Agent Type Badge */}
+                                {agent.agent_type === 'merchant' ? (
+                                  <span className="px-3 py-1 bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border border-cyan-400/50 rounded-full text-cyan-400 text-xs font-bold flex items-center gap-1.5">
+                                    🏪 MERCHANT
+                                  </span>
+                                ) : (
+                                  <span className="px-3 py-1 bg-gradient-to-r from-purple-500/20 to-purple-600/20 border border-purple-400/50 rounded-full text-purple-400 text-xs font-bold flex items-center gap-1.5">
+                                    👤 CLIENT
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3 text-sm mt-1">
                                 <span className={`flex items-center gap-1 ${getStatusColor(agent.status)}`}>
                                   {getStatusIcon(agent.status)} {agent.status.toUpperCase()}
                                 </span>
-                                <span className="text-cyan-400/60">•</span>
-                                <span className="text-cyan-400/60">{agent.agent_type.toUpperCase()}</span>
-                                <span className="text-cyan-400/60">•</span>
-                                <span className="text-cyan-400/60">{agent.products_count} products</span>
+                                {agent.agent_type === 'merchant' && (
+                                  <>
+                                    <span className="text-cyan-400/60">•</span>
+                                    <span className="text-cyan-400/60">{agent.products_count || 0} products</span>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -632,13 +666,29 @@ export default function MarketPage() {
                               </div>
                             )}
                             <div>
-                              <h3 className="text-xl font-bold text-cyan-300">{agent.name}</h3>
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-xl font-bold text-cyan-300">{agent.name}</h3>
+                                {/* Agent Type Badge */}
+                                {agent.agent_type === 'merchant' ? (
+                                  <span className="px-3 py-1 bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border border-cyan-400/50 rounded-full text-cyan-400 text-xs font-bold flex items-center gap-1.5">
+                                    🏪 MERCHANT
+                                  </span>
+                                ) : (
+                                  <span className="px-3 py-1 bg-gradient-to-r from-purple-500/20 to-purple-600/20 border border-purple-400/50 rounded-full text-purple-400 text-xs font-bold flex items-center gap-1.5">
+                                    👤 CLIENT
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3 text-sm mt-1">
                                 <span className="text-cyan-400 flex items-center gap-1">
                                   ● LIVE
                                 </span>
-                                <span className="text-cyan-400/60">•</span>
-                                <span className="text-cyan-400/60">{agent.products_count} products</span>
+                                {agent.agent_type === 'merchant' && (
+                                  <>
+                                    <span className="text-cyan-400/60">•</span>
+                                    <span className="text-cyan-400/60">{agent.products_count || 0} products</span>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
