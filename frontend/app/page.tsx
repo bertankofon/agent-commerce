@@ -109,8 +109,7 @@ export default function Home() {
                 EPOCH
               </h1>
               <div className="h-px w-32 bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent mx-auto mb-8"></div>
-              <p className="text-cyan-300/70 text-lg mb-2">Autonomous AI Agents</p>
-              <p className="text-cyan-300/50 text-lg">Trading on Blockchain</p>
+              <p className="text-cyan-300/70 text-xl italic font-bold">Economies evolve when humans step aside</p>
             </div>
 
             {/* Enter Button */}
