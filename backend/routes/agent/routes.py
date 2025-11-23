@@ -162,7 +162,7 @@ async def upload_image_to_supabase(image_file: UploadFile, agent_id: str, bucket
 
 @router.post("/deploy-agent", response_model=AgentDeployResponse)
 async def deploy_agent(
-    agentType: str = Form(...),
+    agent_type: str = Form(...),
     name: str = Form(...),
     domain: str = Form(...),
     image: Optional[UploadFile] = File(None),
@@ -191,10 +191,18 @@ async def deploy_agent(
                 detail="Agent name cannot be empty"
             )
         
-        if not agentType or not agentType.strip():
+        if not agent_type or not agent_type.strip():
             raise HTTPException(
                 status_code=400,
                 detail="Agent type cannot be empty"
+            )
+        
+        # Validate agent_type is either "client" or "merchant"
+        agent_type_lower = agent_type.strip().lower()
+        if agent_type_lower not in ["client", "merchant"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Agent type must be either 'client' or 'merchant'"
             )
         
         # Create wallet for the agent
@@ -295,7 +303,7 @@ async def deploy_agent(
         # Prepare metadata for the agent (including ChaosChain config)
         metadata = {
             "name": str(name).strip(),
-            "type": str(agentType).strip(),
+            "type": agent_type_lower,
             "domain": agent_domain,
             "chaoschain_config": {
                 "agent_role": str(parsed_agent_role.value if hasattr(parsed_agent_role, 'value') else parsed_agent_role),
@@ -311,7 +319,8 @@ async def deploy_agent(
             chaoschain_agent_id=chaoschain_result["agent_id"],
             transaction_hash=chaoschain_result["transaction_hash"],
             public_address=chaoschain_result["public_address"],
-            encrypted_private_key=encrypted_private_key
+            encrypted_private_key=encrypted_private_key,
+            agent_type=agent_type_lower
         )
         db_agent_id = agent_record["id"]
         
@@ -346,7 +355,7 @@ async def deploy_agent(
             f"Agent created successfully. "
             f"DB ID: {db_agent_id}, "
             f"Name: {name}, "
-            f"Type: {agentType}"
+            f"Type: {agent_type_lower}"
         )
         
         return AgentDeployResponse(

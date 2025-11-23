@@ -120,7 +120,7 @@ export default function DeployPage() {
       // Create FormData for backend
       const formData = new FormData();
       
-      formData.append("agentType", agentType);
+      formData.append("agent_type", agentType);
       formData.append("name", agentName.trim());
       
       // Domain - auto-generate if not provided

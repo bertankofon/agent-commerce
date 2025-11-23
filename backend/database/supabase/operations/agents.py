@@ -21,7 +21,8 @@ class AgentsOperations:
         chaoschain_agent_id: Optional[str] = None,
         transaction_hash: Optional[str] = None,
         public_address: Optional[str] = None,
-        encrypted_private_key: Optional[str] = None
+        encrypted_private_key: Optional[str] = None,
+        agent_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new agent record in the agents table.
@@ -33,6 +34,7 @@ class AgentsOperations:
             transaction_hash: Transaction hash from agent registration
             public_address: Public Ethereum address of the agent wallet
             encrypted_private_key: Encrypted private key of the agent wallet
+            agent_type: Agent type ("client" or "merchant")
         
         Returns:
             Created agent record
@@ -58,6 +60,9 @@ class AgentsOperations:
             
             if encrypted_private_key:
                 data["private_key"] = encrypted_private_key
+            
+            if agent_type:
+                data["agent_type"] = agent_type
             
             response = self.client.table(self.table).insert(data).execute()
             

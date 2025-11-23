@@ -8,7 +8,7 @@ class AgentConfig(BaseModel):
 
 
 class AgentDeployRequest(BaseModel):
-    agentType: str
+    agent_type: str
     config: AgentConfig
 
 

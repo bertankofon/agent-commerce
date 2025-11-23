@@ -109,7 +109,7 @@ backend/
   - Request body:
     ```json
     {
-      "agentType": "seller" | "buyer",
+      "agent_type": "client" | "merchant",
       "config": {
         "name": "agent-name",
         "domain": "agent-name.agent.com"
