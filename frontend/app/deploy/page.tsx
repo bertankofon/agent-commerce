@@ -30,7 +30,9 @@ export default function DeployPage() {
   
   const [agentType, setAgentType] = useState<"merchant" | "client">("merchant");
   const [agentName, setAgentName] = useState("");
+  const [agentDomain, setAgentDomain] = useState("");
   const [agentDescription, setAgentDescription] = useState("");
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   
   // Merchant
   const [products, setProducts] = useState<Product[]>([]);
@@ -115,35 +117,37 @@ export default function DeployPage() {
     setError("");
 
     try {
-      const config =
-        agentType === "merchant"
-          ? {
-              description: agentDescription,
-              products: products.map((p) => ({
-                name: p.name,
-                price: p.price,
-                stock: p.stock,
-                max_discount: p.maxDiscount,
-                image_url: p.imageUrl || "",
-              })),
-            }
-          : {
-              description: agentDescription,
-              search_items: searchItems.map((s) => ({
-                product_name: s.productName,
-                target_price: s.targetPrice,
-                max_budget: s.maxBudget,
-                quantity: s.quantity,
-              })),
-            };
+      // Create FormData for backend
+      const formData = new FormData();
+      
+      formData.append("agentType", agentType);
+      formData.append("name", agentName.trim());
+      
+      // Domain - auto-generate if not provided
+      const domain = agentDomain.trim() || 
+        `${agentName.trim().toLowerCase().replace(/\s+/g, '-')}.epoch.com`;
+      formData.append("domain", domain);
+      
+      // Image if selected
+      if (selectedImage) {
+        formData.append("image", selectedImage);
+      }
+      
+      // Products/search items as JSON metadata (for future use)
+      if (agentType === "merchant") {
+        formData.append("products_json", JSON.stringify(products));
+      } else {
+        formData.append("search_items_json", JSON.stringify(searchItems));
+      }
+      
+      // Description if provided
+      if (agentDescription.trim()) {
+        formData.append("description", agentDescription.trim());
+      }
 
-      const data = await createAgent({
-        name: agentName,
-        type: agentType,
-        config: config,
-      });
+      const data = await createAgent(formData);
 
-      if (data.id) {
+      if (data.agent_id) {
         setSuccess(true);
         setTimeout(() => {
           router.push("/");
@@ -152,7 +156,7 @@ export default function DeployPage() {
         setError("DEPLOYMENT FAILED");
       }
     } catch (err: any) {
-      setError("DEPLOYMENT FAILED");
+      setError(err.message || "DEPLOYMENT FAILED");
     } finally {
       setLoading(false);
     }
@@ -321,6 +325,19 @@ export default function DeployPage() {
 
                   <div>
                     <label className="block text-cyan-300/70 text-sm mb-2 font-semibold">
+                      DOMAIN
+                    </label>
+                    <input
+                      type="text"
+                      value={agentDomain}
+                      onChange={(e) => setAgentDomain(e.target.value)}
+                      className="w-full px-4 py-3 bg-black/50 border-2 border-cyan-400/30 rounded-xl text-cyan-100 placeholder-cyan-400/30 focus:border-cyan-400 transition-all"
+                      placeholder="techstore.epoch.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-cyan-300/70 text-sm mb-2 font-semibold">
                       DESCRIPTION (OPTIONAL)
                     </label>
                     <input
@@ -330,6 +347,23 @@ export default function DeployPage() {
                       className="w-full px-4 py-3 bg-black/50 border-2 border-cyan-400/30 rounded-xl text-cyan-100 placeholder-cyan-400/30 focus:border-cyan-400 transition-all"
                       placeholder="Brief description..."
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-cyan-300/70 text-sm mb-2 font-semibold">
+                      AVATAR IMAGE (OPTIONAL)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setSelectedImage(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-3 bg-black/50 border-2 border-cyan-400/30 rounded-xl text-cyan-100 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-400/20 file:text-cyan-400 hover:file:bg-cyan-400/30 focus:border-cyan-400 transition-all"
+                    />
+                    {selectedImage && (
+                      <p className="text-cyan-400/60 text-xs mt-2">
+                        Selected: {selectedImage.name}
+                      </p>
+                    )}
                   </div>
                 </div>
 

@@ -1,24 +1,30 @@
 const API_BASE = 'http://localhost:8000';
 
-export async function createAgent(data: any) {
-  const res = await fetch(`${API_BASE}/api/agents`, {
+export async function createAgent(formData: FormData) {
+  const res = await fetch(`${API_BASE}/agent/deploy-agent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+    body: formData,
   });
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `API error: ${res.status}`);
+  }
+  
   return res.json();
 }
 
+// Future endpoints (not implemented yet in backend)
 export async function getAgents() {
   const res = await fetch(`${API_BASE}/api/agents`);
   return res.json();
 }
 
-export async function startNegotiation(buyerId: string, sellerId: string) {
+export async function startNegotiation(clientId: string, merchantId: string) {
   const res = await fetch(`${API_BASE}/api/negotiations/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ buyer_id: buyerId, seller_id: sellerId })
+    body: JSON.stringify({ client_id: clientId, merchant_id: merchantId })
   });
   return res.json();
 }
@@ -32,4 +38,3 @@ export async function getNegotiation(id: string) {
   const res = await fetch(`${API_BASE}/api/negotiations/${id}`);
   return res.json();
 }
-
