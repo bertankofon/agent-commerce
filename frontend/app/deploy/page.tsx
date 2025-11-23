@@ -1,8 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { createAgent } from "../lib/api";
+import { createAgent, claimPixels } from "../lib/api";
+import { AuthGuard } from "../lib/auth-guard";
+import { usePrivy } from '@privy-io/react-auth';
+import { CATEGORY_LIST } from "../lib/categories";
+import WalletButton from "../components/WalletButton";
 
 interface Product {
   id: string;
@@ -11,6 +15,7 @@ interface Product {
   stock: number;
   maxDiscount: number;
   imageUrl?: string;
+  imageFile?: File;
 }
 
 interface SearchItem {
@@ -23,6 +28,8 @@ interface SearchItem {
 
 export default function DeployPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, logout } = usePrivy();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -33,12 +40,33 @@ export default function DeployPage() {
   const [agentDomain, setAgentDomain] = useState("");
   const [agentDescription, setAgentDescription] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [selectedPixels, setSelectedPixels] = useState<Array<{x: number, y: number}>>([]);
+  const [merchantCategory, setMerchantCategory] = useState<string>("TECH");
   
   // Merchant
   const [products, setProducts] = useState<Product[]>([]);
   
   // Client
   const [searchItems, setSearchItems] = useState<SearchItem[]>([]);
+
+  // Read URL params on mount
+  useEffect(() => {
+    const type = searchParams.get('type');
+    const pixels = searchParams.get('pixels');
+    
+    if (type === 'merchant' || type === 'client') {
+      setAgentType(type);
+    }
+    
+    if (pixels) {
+      try {
+        const parsedPixels = JSON.parse(decodeURIComponent(pixels));
+        setSelectedPixels(parsedPixels);
+      } catch (e) {
+        console.error("Failed to parse pixels:", e);
+      }
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -52,6 +80,12 @@ export default function DeployPage() {
   }, []);
 
   function addProduct() {
+    const maxProducts = selectedPixels.length > 0 ? selectedPixels.length : 50;
+    if (products.length >= maxProducts) {
+      setError(`Maximum ${maxProducts} products allowed (based on ${selectedPixels.length} pixels selected)`);
+      return;
+    }
+    
     setProducts([
       ...products,
       {
@@ -68,7 +102,7 @@ export default function DeployPage() {
     setProducts(products.filter((p) => p.id !== id));
   }
 
-  function updateProduct(id: string, field: keyof Product, value: any) {
+  function updateProduct(id: string, field: string, value: any) {
     setProducts(
       products.map((p) => (p.id === id ? { ...p, [field]: value } : p))
     );
@@ -135,7 +169,25 @@ export default function DeployPage() {
       
       // Products/search items as JSON metadata (for future use)
       if (agentType === "merchant") {
-        formData.append("products_json", JSON.stringify(products));
+        // Prepare products data without File objects (can't be JSON stringified)
+        const productsData = products.map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          stock: p.stock,
+          maxDiscount: p.maxDiscount,
+          imageUrl: p.imageUrl || ""
+        }));
+        formData.append("products_json", JSON.stringify(productsData));
+        formData.append("category", merchantCategory);
+        
+        // Append product images separately
+        products.forEach((product, index) => {
+          if (product.imageFile) {
+            formData.append(`product_image_${index}`, product.imageFile);
+            formData.append(`product_image_${index}_id`, product.id);
+          }
+        });
       } else {
         formData.append("search_items_json", JSON.stringify(searchItems));
       }
@@ -145,12 +197,46 @@ export default function DeployPage() {
         formData.append("description", agentDescription.trim());
       }
 
+      // Add user wallet address
+      if (user?.wallet?.address) {
+        formData.append("user_wallet_address", user.wallet.address);
+      }
+      
+      // Add user ID for Supabase tracking
+      if (user?.id) {
+        formData.append("user_id", user.id);
+      }
+
       const data = await createAgent(formData);
+      console.log("Deploy response:", data);
 
       if (data.agent_id) {
+        // Claim pixels if merchant and pixels selected
+        if (agentType === "merchant" && selectedPixels.length > 0 && data.db_id) {
+          console.log("Attempting to claim pixels:", {
+            db_id: data.db_id,
+            pixels: selectedPixels,
+            count: selectedPixels.length
+          });
+          try {
+            const claimResult = await claimPixels(data.db_id, selectedPixels);
+            console.log("Pixels claimed successfully:", claimResult);
+          } catch (pixelErr: any) {
+            console.error("Failed to claim pixels:", pixelErr);
+            setError(`Deployment successful but pixel claim failed: ${pixelErr.message}`);
+            // Don't fail deployment if pixel claim fails
+          }
+        } else {
+          console.log("Skipping pixel claim:", {
+            agentType,
+            pixelsLength: selectedPixels.length,
+            hasDbId: !!data.db_id
+          });
+        }
+        
         setSuccess(true);
         setTimeout(() => {
-          router.push("/");
+          router.push("/market");
         }, 2000);
       } else {
         setError("DEPLOYMENT FAILED");
@@ -163,79 +249,95 @@ export default function DeployPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Space Background */}
-      <div
-        className="space-bg"
-        style={{
-          transform: `translate(${mousePos.x * 8}px, ${mousePos.y * 8}px)`,
-          transition: "transform 0.3s ease-out",
-        }}
-      >
-        <div className="perspective-grid"></div>
-        <div className="stars"></div>
-        <div
-          className="floating-orb orb-1"
-          style={{
-            transform: `translate(${mousePos.x * 25}px, ${mousePos.y * 25}px)`,
-            transition: "transform 0.5s ease-out",
-          }}
-        ></div>
-        <div
-          className="floating-orb orb-2"
-          style={{
-            transform: `translate(${-mousePos.x * 35}px, ${-mousePos.y * 35}px)`,
-            transition: "transform 0.5s ease-out",
-          }}
-        ></div>
-      </div>
+    <AuthGuard>
+      <div className="min-h-screen bg-black relative overflow-hidden">
+        {/* Wallet Button - Top Right */}
+        <WalletButton />
 
-      {/* Content */}
-      <div className="relative z-10 min-h-screen p-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Back Button */}
-          <Link
-            href="/"
-            className="inline-flex items-center text-cyan-400/60 hover:text-cyan-400 mb-8 transition-colors"
-          >
-            <span className="mr-2">←</span>
-            <span>Back</span>
-          </Link>
-
-          {/* Main Container */}
+        {/* Space Background */}
+        <div
+          className="space-bg"
+          style={{
+            transform: `translate(${mousePos.x * 8}px, ${mousePos.y * 8}px)`,
+            transition: "transform 0.3s ease-out",
+          }}
+        >
+          <div className="perspective-grid"></div>
+          <div className="stars"></div>
           <div
-            className="border-2 border-cyan-400/30 rounded-3xl p-8 backdrop-blur-sm bg-black/40 shadow-2xl shadow-cyan-500/20"
+            className="floating-orb orb-1"
             style={{
-              transform: `perspective(1000px) rotateY(${mousePos.x * 2}deg) rotateX(${-mousePos.y * 2}deg)`,
-              transition: "transform 0.3s ease-out",
+              transform: `translate(${mousePos.x * 25}px, ${mousePos.y * 25}px)`,
+              transition: "transform 0.5s ease-out",
             }}
-          >
-            {/* Title */}
-            <h1 className="text-4xl font-bold text-center mb-8 neon-text">
-              DEPLOY AGENT
-            </h1>
+          ></div>
+          <div
+            className="floating-orb orb-2"
+            style={{
+              transform: `translate(${-mousePos.x * 35}px, ${-mousePos.y * 35}px)`,
+              transition: "transform 0.5s ease-out",
+            }}
+          ></div>
+        </div>
 
-            {/* Success Message */}
-            {success && (
-              <div className="border-2 border-cyan-400 rounded-2xl p-6 mb-8 bg-cyan-400/10 text-center">
-                <div className="text-5xl mb-3">✓</div>
-                <p className="text-cyan-400 text-xl font-semibold">
-                  AGENT DEPLOYED
-                </p>
-                <p className="text-cyan-300/60 text-sm mt-2">Redirecting...</p>
-              </div>
-            )}
+        {/* Content */}
+        <div className="relative z-10 min-h-screen p-8">
+          <div className="max-w-4xl mx-auto">
+            {/* Back Button */}
+            <Link
+              href="/"
+              className="inline-flex items-center text-cyan-400/60 hover:text-cyan-400 mb-8 transition-colors"
+            >
+              <span className="mr-2">←</span>
+              <span>Back</span>
+            </Link>
 
-            {/* Error */}
-            {error && (
-              <div className="border-2 border-cyan-400 rounded-2xl p-4 mb-6 bg-cyan-400/10">
-                <p className="text-cyan-400 text-center font-semibold">
-                  {error}
-                </p>
-              </div>
-            )}
+            {/* Main Container */}
+            <div
+              className="border-2 border-cyan-400/30 rounded-3xl p-8 backdrop-blur-sm bg-black/40 shadow-2xl shadow-cyan-500/20"
+              style={{
+                transform: `perspective(1000px) rotateY(${mousePos.x * 2}deg) rotateX(${-mousePos.y * 2}deg)`,
+                transition: "transform 0.3s ease-out",
+              }}
+            >
+              {/* Title */}
+              <h1 className="text-4xl font-bold text-center mb-4 neon-text">
+                DEPLOY AGENT
+              </h1>
+              
+              {/* Pixel Info */}
+              {agentType === "merchant" && selectedPixels.length > 0 && (
+                <div className="border-2 border-cyan-400/50 rounded-xl p-4 mb-6 bg-cyan-400/5 text-center">
+                  <p className="text-cyan-400 font-semibold">
+                    📍 {selectedPixels.length} Pixels Selected
+                  </p>
+                  <p className="text-cyan-400/60 text-sm mt-1">
+                    Max {selectedPixels.length} products can be listed
+                  </p>
+                </div>
+              )}
 
-            {!success && (
+              {/* Success Message */}
+              {success && (
+                <div className="border-2 border-cyan-400 rounded-2xl p-6 mb-8 bg-cyan-400/10 text-center">
+                  <div className="text-5xl mb-3">✓</div>
+                  <p className="text-cyan-400 text-xl font-semibold">
+                    AGENT DEPLOYED
+                  </p>
+                  <p className="text-cyan-300/60 text-sm mt-2">Redirecting...</p>
+                </div>
+              )}
+
+              {/* Error */}
+              {error && (
+                <div className="border-2 border-cyan-400 rounded-2xl p-4 mb-6 bg-cyan-400/10">
+                  <p className="text-cyan-400 text-center font-semibold">
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              {!success && (
               <>
                 {/* Type Selector */}
                 <div className="grid grid-cols-2 gap-6 mb-8">
@@ -348,6 +450,32 @@ export default function DeployPage() {
                       placeholder="Brief description..."
                     />
                   </div>
+
+                  {/* Category Selection (Merchant only) */}
+                  {agentType === "merchant" && (
+                    <div>
+                      <label className="block text-cyan-300/70 text-sm mb-2 font-semibold">
+                        STORE CATEGORY
+                      </label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {CATEGORY_LIST.map((category) => (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => setMerchantCategory(category.id)}
+                            className={`p-3 rounded-xl border-2 transition-all ${
+                              merchantCategory === category.id
+                                ? "border-cyan-400 bg-cyan-400/10 shadow-lg shadow-cyan-400/20"
+                                : "border-cyan-400/20 hover:border-cyan-400/40"
+                            }`}
+                          >
+                            <div className="text-2xl mb-1">{category.emoji}</div>
+                            <div className="text-xs text-cyan-300 font-semibold">{category.name}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-cyan-300/70 text-sm mb-2 font-semibold">
@@ -472,23 +600,74 @@ export default function DeployPage() {
                                 min="0"
                               />
                             </div>
-                            <div>
-                              <label className="block text-cyan-300/60 text-xs mb-1">
-                                IMAGE URL (OPT)
+                            {/* Product Image Upload - Simple Method */}
+                            <div className="col-span-2">
+                              <label className="block text-cyan-300/60 text-xs mb-2 font-semibold">
+                                PRODUCT IMAGE (OPTIONAL)
                               </label>
-                              <input
-                                type="text"
-                                value={product.imageUrl || ""}
-                                onChange={(e) =>
-                                  updateProduct(
-                                    product.id,
-                                    "imageUrl",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-full px-3 py-2 bg-black/50 border border-cyan-400/30 rounded-lg text-cyan-100 text-sm focus:border-cyan-400 transition-all"
-                                placeholder="https://..."
-                              />
+                              
+                              {/* Show preview if image selected */}
+                              {product.imageFile && (
+                                <div className="mb-3">
+                                  <div className="relative inline-block">
+                                    <img
+                                      src={URL.createObjectURL(product.imageFile)}
+                                      alt="Preview"
+                                      className="w-32 h-32 object-cover rounded-lg border-2 border-cyan-400/50"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateProduct(product.id, "imageFile", undefined);
+                                      }}
+                                      className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg transition-all"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                  <p className="text-cyan-400/60 text-xs mt-2">
+                                    {product.imageFile.name} ({(product.imageFile.size / 1024).toFixed(1)} KB)
+                                  </p>
+                                </div>
+                              )}
+                              
+                              {/* Upload button */}
+                              {!product.imageFile && (
+                                <div>
+                                  <input
+                                    type="file"
+                                    id={`img-${product.id}`}
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        // Check file size (5MB max)
+                                        if (file.size > 5 * 1024 * 1024) {
+                                          alert("Image must be less than 5MB");
+                                          return;
+                                        }
+                                        // Check file type
+                                        if (!file.type.startsWith('image/')) {
+                                          alert("Please select an image file");
+                                          return;
+                                        }
+                                        updateProduct(product.id, "imageFile", file);
+                                      }
+                                    }}
+                                    className="hidden"
+                                  />
+                                  <label
+                                    htmlFor={`img-${product.id}`}
+                                    className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-400/10 border-2 border-cyan-400/40 rounded-xl text-cyan-400 hover:bg-cyan-400/20 hover:border-cyan-400 transition-all cursor-pointer font-semibold text-sm"
+                                  >
+                                    <span className="text-lg">📷</span>
+                                    Choose Image
+                                  </label>
+                                  <p className="text-cyan-400/40 text-xs mt-2">
+                                    Max 5MB • JPG, PNG, WEBP, GIF
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -630,9 +809,10 @@ export default function DeployPage() {
                 </button>
               </>
             )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </AuthGuard>
   );
 }

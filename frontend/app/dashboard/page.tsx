@@ -1,235 +1,260 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+import { usePrivy } from '@privy-io/react-auth';
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getAgents, getNegotiations, startNegotiation } from "../lib/api";
-import type { Agent, Negotiation } from "../lib/types";
+import { getMyAgents, updateAgentStatus } from "../lib/api";
 
-export default function Dashboard() {
+interface Agent {
+  id: string;
+  name: string;
+  agent_type: 'merchant' | 'client';
+  status: 'live' | 'paused' | 'draft';
+  avatar_url?: string;
+  owner?: string;
+  category?: string;
+  pixel_count?: number;
+  created_at: string;
+}
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const { authenticated, user } = usePrivy();
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBuyer, setSelectedBuyer] = useState("");
-  const [selectedSeller, setSelectedSeller] = useState("");
-  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function loadData() {
-    try {
-      const [agentsData, negotiationsData] = await Promise.all([
-        getAgents(),
-        getNegotiations(),
-      ]);
-      setAgents(agentsData || []);
-      setNegotiations(negotiationsData || []);
-      setLoading(false);
-    } catch (error) {
-      setLoading(false);
+    if (!authenticated) {
+      router.push('/');
+      return;
     }
-  }
+    loadAgents();
+  }, [authenticated, user]);
 
-  async function handleStartNegotiation() {
-    if (!selectedBuyer || !selectedSeller) return;
-
-    setStarting(true);
+  async function loadAgents() {
+    if (!user?.wallet?.address) return;
+    
     try {
-      const data = await startNegotiation(selectedBuyer, selectedSeller);
-      if (data.id) {
-        window.location.href = `/negotiation/${data.id}`;
-      }
+      setLoading(true);
+      setError("");
+      const data = await getMyAgents(user.wallet.address);
+      setAgents(data.agents || []);
+    } catch (err: any) {
+      console.error("Error loading agents:", err);
+      setError(err.message || "Failed to load agents");
     } finally {
-      setStarting(false);
+      setLoading(false);
     }
   }
 
-  const buyers = agents.filter((a) => a.type === "buyer");
-  const sellers = agents.filter((a) => a.type === "seller");
-  const activeNegotiations = negotiations.filter((n) => n.status === "in_progress");
-  const completedNegotiations = negotiations.filter((n) => n.status === "completed");
+  async function handleToggleStatus(agentId: string, currentStatus: string) {
+    const newStatus = currentStatus === 'live' ? 'paused' : 'live';
+    try {
+      await updateAgentStatus(agentId, newStatus);
+      await loadAgents(); // Reload
+    } catch (err: any) {
+      console.error("Failed to update status:", err);
+      setError(err.message);
+    }
+  }
+
+  const merchantAgents = agents.filter(a => a.agent_type === 'merchant');
+  const clientAgents = agents.filter(a => a.agent_type === 'client');
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#5A7EDC] flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-cyan-400/60">Loading Your Agents...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#5A7EDC] p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* XP Window */}
-        <div className="bg-white rounded-lg shadow-2xl overflow-hidden" style={{ border: '3px solid #0831D9' }}>
-          {/* Title Bar */}
-          <div className="bg-gradient-to-r from-[#0831D9] to-[#3165F0] px-3 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-white rounded-sm"></div>
-              <span className="text-white font-bold text-sm">Dashboard - Agent Commerce</span>
+    <div className="min-h-screen bg-black text-cyan-100 relative overflow-hidden">
+      {/* Background */}
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(0,217,255,0.1),transparent_50%)]" />
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#0a0a0a_1px,transparent_1px),linear-gradient(to_bottom,#0a0a0a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,#000,transparent)]" />
+
+      {/* Header */}
+      <header className="relative z-10 border-b border-cyan-400/20 bg-black/50 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span className="text-black font-bold text-xl">E</span>
             </div>
-            <div className="flex gap-1">
-              <button className="w-5 h-5 bg-[#2E6EE6] border border-white flex items-center justify-center text-white text-xs">_</button>
-              <button className="w-5 h-5 bg-[#2E6EE6] border border-white flex items-center justify-center text-white text-xs">□</button>
-              <button className="w-5 h-5 bg-[#D93831] border border-white flex items-center justify-center text-white text-xs">×</button>
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent">
+                MY DASHBOARD
+              </h1>
+              <p className="text-cyan-400/40 text-xs">Manage Your Agents</p>
             </div>
-          </div>
+          </Link>
 
-          {/* Menu Bar */}
-          <div className="bg-gradient-to-b from-[#F1F3FD] to-[#D9E4F5] border-b border-[#9CB0D7] px-2 py-1 flex justify-between items-center">
-            <div className="flex gap-4 text-sm">
-              <span className="hover:bg-[#316AC5] hover:text-white px-2 py-1 cursor-pointer">File</span>
-              <span className="hover:bg-[#316AC5] hover:text-white px-2 py-1 cursor-pointer">View</span>
-              <span className="hover:bg-[#316AC5] hover:text-white px-2 py-1 cursor-pointer">Tools</span>
-            </div>
-            <Link
-              href="/deploy"
-              className="px-4 py-1 bg-gradient-to-b from-[#F0F0F0] to-[#C8C8C8] border-2 rounded text-sm font-bold"
-              style={{ borderColor: '#FFFFFF #555555 #555555 #FFFFFF' }}
-            >
-              Deploy New
-            </Link>
-          </div>
-
-          {/* Content */}
-          <div className="p-6 bg-gradient-to-b from-[#ECE9D8] to-[#D6D3C9]">
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="bg-gradient-to-b from-[#D4D0C8] to-[#B8B4AC] border-2 rounded p-4 text-center"
-                   style={{ borderColor: '#FFFFFF #404040 #404040 #FFFFFF' }}>
-                <div className="text-xs font-bold mb-1">TOTAL</div>
-                <div className="text-3xl font-bold text-[#0831D9]">{agents.length}</div>
-              </div>
-              <div className="bg-gradient-to-b from-[#D4D0C8] to-[#B8B4AC] border-2 rounded p-4 text-center"
-                   style={{ borderColor: '#FFFFFF #404040 #404040 #FFFFFF' }}>
-                <div className="text-xs font-bold mb-1">BUYERS</div>
-                <div className="text-3xl font-bold text-[#128C12]">{buyers.length}</div>
-              </div>
-              <div className="bg-gradient-to-b from-[#D4D0C8] to-[#B8B4AC] border-2 rounded p-4 text-center"
-                   style={{ borderColor: '#FFFFFF #404040 #404040 #FFFFFF' }}>
-                <div className="text-xs font-bold mb-1">SELLERS</div>
-                <div className="text-3xl font-bold text-[#D93831]">{sellers.length}</div>
-              </div>
-              <div className="bg-gradient-to-b from-[#D4D0C8] to-[#B8B4AC] border-2 rounded p-4 text-center"
-                   style={{ borderColor: '#FFFFFF #404040 #404040 #FFFFFF' }}>
-                <div className="text-xs font-bold mb-1">ACTIVE</div>
-                <div className="text-3xl font-bold text-[#FF8C00]">{activeNegotiations.length}</div>
-              </div>
-            </div>
-
-            {/* Start Section */}
-            <div className="bg-white border-2 rounded p-4 mb-6" style={{ borderColor: '#0831D9' }}>
-              <h2 className="text-lg font-bold text-[#0831D9] mb-4">Start Negotiation</h2>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-bold mb-1">Select Buyer:</label>
-                  <select
-                    value={selectedBuyer}
-                    onChange={(e) => setSelectedBuyer(e.target.value)}
-                    className="w-full px-3 py-2 border-2 rounded bg-white"
-                    style={{ borderColor: '#7F9DB9' }}
-                  >
-                    <option value="">Choose...</option>
-                    {buyers.map((buyer) => (
-                      <option key={buyer.id} value={buyer.id}>
-                        {buyer.name} (${buyer.config.max_price})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold mb-1">Select Seller:</label>
-                  <select
-                    value={selectedSeller}
-                    onChange={(e) => setSelectedSeller(e.target.value)}
-                    className="w-full px-3 py-2 border-2 rounded bg-white"
-                    style={{ borderColor: '#7F9DB9' }}
-                  >
-                    <option value="">Choose...</option>
-                    {sellers.map((seller) => (
-                      <option key={seller.id} value={seller.id}>
-                        {seller.name} (${seller.config.initial_price})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <button
-                onClick={handleStartNegotiation}
-                disabled={!selectedBuyer || !selectedSeller || starting}
-                className="w-full px-6 py-3 bg-gradient-to-b from-[#F0F0F0] to-[#C8C8C8] border-2 rounded shadow-md font-bold disabled:opacity-50"
-                style={{ borderColor: '#FFFFFF #555555 #555555 #FFFFFF' }}
-              >
-                {starting ? "Starting..." : "Start Negotiation"}
-              </button>
-            </div>
-
-            {/* Active Negotiations */}
-            {activeNegotiations.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-md font-bold mb-3 text-[#0831D9]">Active Negotiations</h3>
-                <div className="space-y-2">
-                  {activeNegotiations.map((neg) => (
-                    <Link
-                      key={neg.id}
-                      href={`/negotiation/${neg.id}`}
-                      className="block bg-[#FFFACD] border-2 rounded p-3 hover:bg-[#FFEC8B]"
-                      style={{ borderColor: '#FF8C00' }}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div className="font-bold">{neg.buyer_name || "Buyer"} → {neg.seller_name || "Seller"}</div>
-                        <div className="text-xs bg-[#FF8C00] text-white px-2 py-1 rounded">LIVE</div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Completed */}
-            {completedNegotiations.length > 0 && (
-              <div>
-                <h3 className="text-md font-bold mb-3 text-[#0831D9]">Completed</h3>
-                <div className="space-y-2">
-                  {completedNegotiations.map((neg) => (
-                    <Link
-                      key={neg.id}
-                      href={`/negotiation/${neg.id}`}
-                      className="block bg-[#E0FFE0] border-2 rounded p-3 hover:bg-[#C8FFC8]"
-                      style={{ borderColor: '#128C12' }}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <div className="font-bold">{neg.buyer_name || "Buyer"} → {neg.seller_name || "Seller"}</div>
-                          <div className="text-sm">${neg.final_price} × {neg.quantity}</div>
-                        </div>
-                        <div className="text-2xl text-[#128C12]">✓</div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {agents.length === 0 && (
-              <div className="bg-white border-2 rounded p-12 text-center" style={{ borderColor: '#0831D9' }}>
-                <div className="text-6xl mb-4">📦</div>
-                <h3 className="text-xl font-bold mb-4">No Agents Yet</h3>
-                <Link
-                  href="/deploy"
-                  className="inline-block px-8 py-3 bg-gradient-to-b from-[#F0F0F0] to-[#C8C8C8] border-2 rounded shadow-md font-bold"
-                  style={{ borderColor: '#FFFFFF #555555 #555555 #FFFFFF' }}
-                >
-                  Deploy First Agent
-                </Link>
-              </div>
-            )}
-          </div>
+          <Link
+            href="/"
+            className="px-4 py-2 border border-cyan-400/50 rounded-lg text-cyan-400 hover:border-cyan-400 hover:bg-cyan-400/10 transition-all text-sm font-semibold"
+          >
+            ← Back to Marketplace
+          </Link>
         </div>
-      </div>
+      </header>
+
+      <main className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400">
+            {error}
+          </div>
+        )}
+
+        {/* Merchant Agents */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-cyan-300 flex items-center gap-2">
+              <span>🏪</span> Merchant Agents
+              <span className="text-cyan-400/60 text-sm">({merchantAgents.length})</span>
+            </h2>
+          </div>
+
+          {merchantAgents.length === 0 ? (
+            <div className="bg-black/50 border-2 border-cyan-400/20 rounded-xl p-12 text-center backdrop-blur-sm">
+              <p className="text-cyan-400/40 mb-4">No merchant agents yet</p>
+              <Link
+                href="/"
+                className="inline-block px-6 py-3 bg-gradient-to-r from-cyan-400 to-cyan-600 rounded-lg text-black font-semibold hover:shadow-lg hover:shadow-cyan-400/50 transition-all"
+              >
+                Open Your First Store
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {merchantAgents.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="bg-black/50 border-2 border-cyan-400/30 rounded-xl p-4 hover:border-cyan-400/60 transition-all backdrop-blur-sm"
+                >
+                  {/* Avatar */}
+                  {agent.avatar_url && (
+                    <div className="text-center text-4xl mb-3">
+                      {agent.avatar_url}
+                    </div>
+                  )}
+
+                  {/* Name */}
+                  <h3 className="text-lg font-bold text-cyan-300 mb-2 text-center">
+                    {agent.name}
+                  </h3>
+
+                  {/* Category */}
+                  {agent.category && (
+                    <p className="text-cyan-400/60 text-xs text-center mb-3">
+                      {agent.category}
+                    </p>
+                  )}
+
+                  {/* Stats */}
+                  <div className="space-y-1 text-xs mb-3">
+                    <div className="flex justify-between">
+                      <span className="text-cyan-400/60">Pixels:</span>
+                      <span className="text-cyan-300">{agent.pixel_count || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-cyan-400/60">Status:</span>
+                      <span className={`font-semibold ${
+                        agent.status === 'live' ? 'text-green-400' : 
+                        agent.status === 'paused' ? 'text-yellow-400' : 
+                        'text-gray-400'
+                      }`}>
+                        {agent.status.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleToggleStatus(agent.id, agent.status)}
+                      className="flex-1 px-3 py-2 border border-cyan-400/50 rounded-lg text-cyan-400 hover:border-cyan-400 hover:bg-cyan-400/10 transition-all text-xs font-semibold"
+                    >
+                      {agent.status === 'live' ? '⏸ Pause' : '▶ Resume'}
+                    </button>
+                    <Link
+                      href="/"
+                      className="flex-1 px-3 py-2 border border-cyan-400/50 rounded-lg text-cyan-400 hover:border-cyan-400 hover:bg-cyan-400/10 transition-all text-xs font-semibold text-center"
+                    >
+                      View on Map
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Client Agents */}
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-cyan-300 flex items-center gap-2">
+              <span>👤</span> Client Agents
+              <span className="text-cyan-400/60 text-sm">({clientAgents.length})</span>
+            </h2>
+          </div>
+
+          {clientAgents.length === 0 ? (
+            <div className="bg-black/50 border-2 border-cyan-400/20 rounded-xl p-12 text-center backdrop-blur-sm">
+              <p className="text-cyan-400/40 mb-4">No client agents yet</p>
+              <p className="text-cyan-400/60 text-sm">
+                Client agents are created automatically when you start a negotiation
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {clientAgents.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="bg-black/50 border-2 border-purple-400/30 rounded-xl p-4 hover:border-purple-400/60 transition-all backdrop-blur-sm"
+                >
+                  {/* Avatar */}
+                  {agent.avatar_url && (
+                    <div className="text-center text-4xl mb-3">
+                      {agent.avatar_url}
+                    </div>
+                  )}
+
+                  {/* Name */}
+                  <h3 className="text-lg font-bold text-purple-300 mb-2 text-center">
+                    {agent.name}
+                  </h3>
+
+                  {/* Status */}
+                  <div className="text-xs mb-3 text-center">
+                    <span className={`font-semibold ${
+                      agent.status === 'live' ? 'text-green-400' : 
+                      agent.status === 'paused' ? 'text-yellow-400' : 
+                      'text-gray-400'
+                    }`}>
+                      {agent.status.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleToggleStatus(agent.id, agent.status)}
+                      className="flex-1 px-3 py-2 border border-purple-400/50 rounded-lg text-purple-400 hover:border-purple-400 hover:bg-purple-400/10 transition-all text-xs font-semibold"
+                    >
+                      {agent.status === 'live' ? '⏸ Pause' : '▶ Resume'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

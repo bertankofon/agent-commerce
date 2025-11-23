@@ -22,7 +22,10 @@ class AgentsOperations:
         transaction_hash: Optional[str] = None,
         public_address: Optional[str] = None,
         encrypted_private_key: Optional[str] = None,
-        agent_type: Optional[str] = None
+        agent_type: Optional[str] = None,
+        name: Optional[str] = None,
+        owner: Optional[str] = None,
+        category: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new agent record in the agents table.
@@ -35,6 +38,8 @@ class AgentsOperations:
             public_address: Public Ethereum address of the agent wallet
             encrypted_private_key: Encrypted private key of the agent wallet
             agent_type: Agent type ("client" or "merchant")
+            name: Agent name
+            owner: Owner wallet address or identifier
         
         Returns:
             Created agent record
@@ -63,6 +68,16 @@ class AgentsOperations:
             
             if agent_type:
                 data["agent_type"] = agent_type
+            
+            # Add agent details
+            if name:
+                data["name"] = name
+            
+            if owner:
+                data["owner"] = owner
+            
+            if category:
+                data["category"] = category
             
             response = self.client.table(self.table).insert(data).execute()
             
@@ -106,40 +121,18 @@ class AgentsOperations:
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Update agent metadata.
+        Update agent metadata - DEPRECATED: metadata column doesn't exist in current schema.
+        This function is kept for backwards compatibility but does nothing.
         
         Args:
             agent_id: UUID of the agent
-            metadata: Updated metadata (stored in metadata column if it exists)
+            metadata: Metadata (ignored)
         
         Returns:
-            Updated agent record
+            Current agent record
         """
-        try:
-            # Try to update metadata column, but don't fail if it doesn't exist
-            update_data = {}
-            if metadata:
-                # Check if metadata column exists, otherwise skip
-                update_data["metadata"] = metadata
-            
-            if not update_data:
-                logger.warning(f"No metadata to update for agent {agent_id}")
-                return self.get_agent_by_id(agent_id) or {}
-            
-            response = self.client.table(self.table)\
-                .update(update_data)\
-                .eq("id", str(agent_id))\
-                .execute()
-            
-            if not response.data:
-                raise ValueError(f"Agent {agent_id} not found")
-            
-            logger.info(f"Updated agent metadata for ID: {agent_id}")
-            return response.data[0]
-            
-        except Exception as e:
-            logger.error(f"Error updating agent {agent_id}: {str(e)}")
-            raise
+        logger.warning(f"update_agent_metadata called but metadata column doesn't exist. Returning current agent.")
+        return self.get_agent_by_id(agent_id) or {}
     
     def update_agent_avatar_url(
         self,
@@ -193,5 +186,90 @@ class AgentsOperations:
             
         except Exception as e:
             logger.error(f"Error listing agents: {str(e)}")
+            raise
+    
+    def get_agents_by_owner(self, owner: str, limit: int = 100) -> list[Dict[str, Any]]:
+        """
+        Get all agents owned by a specific user.
+        
+        Args:
+            owner: Owner wallet address or Privy user ID
+            limit: Maximum number of agents to return
+        
+        Returns:
+            List of agent records
+        """
+        try:
+            response = self.client.table(self.table)\
+                .select("*")\
+                .eq("owner", owner)\
+                .order("created_at", desc=True)\
+                .limit(limit)\
+                .execute()
+            
+            return response.data or []
+            
+        except Exception as e:
+            logger.error(f"Error getting agents for owner {owner}: {str(e)}")
+            raise
+    
+    def get_live_agents(self, limit: int = 100) -> list[Dict[str, Any]]:
+        """
+        Get all live agents (for market display).
+        Only returns agents with status='live' and agent_type='merchant'.
+        
+        Args:
+            limit: Maximum number of agents to return
+        
+        Returns:
+            List of live agent records
+        """
+        try:
+            response = self.client.table(self.table)\
+                .select("*")\
+                .eq("status", "live")\
+                .eq("agent_type", "merchant")\
+                .order("created_at", desc=True)\
+                .limit(limit)\
+                .execute()
+            
+            return response.data or []
+            
+        except Exception as e:
+            logger.error(f"Error getting live agents: {str(e)}")
+            raise
+    
+    def update_agent_status(
+        self,
+        agent_id: UUID,
+        status: str
+    ) -> Dict[str, Any]:
+        """
+        Update agent status (live, paused, draft).
+        
+        Args:
+            agent_id: UUID of the agent
+            status: New status ('live', 'paused', or 'draft')
+        
+        Returns:
+            Updated agent record
+        """
+        try:
+            if status not in ["live", "paused", "draft"]:
+                raise ValueError(f"Invalid status: {status}. Must be 'live', 'paused', or 'draft'")
+            
+            response = self.client.table(self.table)\
+                .update({"status": status})\
+                .eq("id", str(agent_id))\
+                .execute()
+            
+            if not response.data:
+                raise ValueError(f"Agent {agent_id} not found")
+            
+            logger.info(f"Updated agent {agent_id} status to: {status}")
+            return response.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error updating agent status {agent_id}: {str(e)}")
             raise
 

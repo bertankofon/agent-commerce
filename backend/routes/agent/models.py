@@ -14,6 +14,7 @@ class AgentDeployRequest(BaseModel):
 
 class AgentDeployResponse(BaseModel):
     agent_id: str
+    db_id: Optional[str] = None  # Supabase UUID for pixel claims
     status: str
     agent0_id: Optional[str] = None
     metadata: Optional[Dict] = None

@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from middleware import RequestLoggingMiddleware, DummyAuthMiddleware
 from routes.agent.routes import router as agent_router
 from routes.negotiation.routes import router as negotiation_router
+from routes.auth.routes import router as auth_router
+from routes.market.routes import router as market_router
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +46,8 @@ app.add_middleware(DummyAuthMiddleware)
 # Include routers
 app.include_router(agent_router)
 app.include_router(negotiation_router)
+app.include_router(auth_router)
+app.include_router(market_router)
 
 
 @app.get("/health")

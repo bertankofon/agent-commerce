@@ -1,9 +1,54 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePrivy } from '@privy-io/react-auth';
+import { loginOrRegisterUser } from './lib/auth';
+import WalletButton from './components/WalletButton';
 
 export default function Home() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isRegistering, setIsRegistering] = useState(false);
+  const { ready, authenticated, login, user } = usePrivy();
+
+  // Auto-register/login user when authenticated
+  useEffect(() => {
+    const registerUser = async () => {
+      if (authenticated && user && !isRegistering) {
+        try {
+          setIsRegistering(true);
+          
+          // Get user data from Privy
+          const privyUserId = user.id;
+          const walletAddress = user.wallet?.address;
+          
+          if (!walletAddress) {
+            console.error('No wallet address found');
+            return;
+          }
+          
+          // Extract email and name from Privy user object
+          const email = user.email?.address || user.google?.email || undefined;
+          const name = user.google?.name || undefined;
+          
+          // Register or login user to backend
+          await loginOrRegisterUser({
+            privy_user_id: privyUserId,
+            wallet_address: walletAddress,
+            email,
+            name,
+          });
+          
+          console.log('User registered/logged in successfully');
+        } catch (error) {
+          console.error('Failed to register/login user:', error);
+        } finally {
+          setIsRegistering(false);
+        }
+      }
+    };
+    
+    registerUser();
+  }, [authenticated, user, isRegistering]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -18,6 +63,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Wallet Button - Top Right */}
+      <WalletButton />
+      
       {/* Space Background */}
       <div 
         className="space-bg"
@@ -66,14 +114,39 @@ export default function Home() {
             </div>
 
             {/* Enter Button */}
-            <div className="flex justify-center">
-              <Link
-                href="/deploy"
-                className="group relative px-20 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
-              >
-                <span className="relative z-10">DEPLOY AGENT</span>
-                <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              </Link>
+            <div className="flex flex-col items-center gap-4">
+              {!ready ? (
+                <div className="px-20 py-5 border-2 border-cyan-400/30 rounded-full text-cyan-400/50 font-bold text-lg">
+                  LOADING...
+                </div>
+              ) : !authenticated ? (
+                <button
+                  onClick={login}
+                  className="group relative px-20 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
+                >
+                  <span className="relative z-10">CONNECT</span>
+                  <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </button>
+              ) : (
+                <>
+                  <div className="flex gap-4">
+                    <Link
+                      href="/deploy"
+                      className="group relative px-12 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
+                    >
+                      <span className="relative z-10">DEPLOY AGENT</span>
+                      <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </Link>
+                    <Link
+                      href="/market"
+                      className="group relative px-12 py-5 border-2 border-cyan-400/60 rounded-full text-cyan-400 font-bold text-lg hover:border-cyan-400 transition-all duration-300 neon-button overflow-hidden"
+                    >
+                      <span className="relative z-10">MARKET</span>
+                      <div className="absolute inset-0 bg-cyan-400/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </Link>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
