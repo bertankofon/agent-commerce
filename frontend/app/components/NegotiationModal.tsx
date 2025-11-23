@@ -39,6 +39,7 @@ interface Negotiation {
   agreed: boolean;
   status: string;
   payment_successful?: boolean | null;
+  txn_hash?: string | null;
   chat_history: ChatMessage[];
   created_at: string;
 }
@@ -500,6 +501,32 @@ export default function NegotiationModal({
                     )}
                   </div>
                 </div>
+
+                {/* Transaction Hash */}
+                {negotiationResult.txn_hash && (
+                  <div className="border-t border-cyan-400/20 pt-4 mt-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="text-sm font-bold text-cyan-400/80">Transaction Hash:</h4>
+                      <span className="text-xs px-2 py-1 rounded-full border text-green-400 border-green-400/50 bg-green-400/10">
+                        ✓ x402
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs text-cyan-300/80 font-mono bg-black/40 px-3 py-2 rounded border border-cyan-400/20 break-all">
+                        {negotiationResult.txn_hash}
+                      </code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(negotiationResult.txn_hash || '');
+                        }}
+                        className="text-cyan-400/60 hover:text-cyan-400 transition-all text-sm px-2 py-1 border border-cyan-400/30 rounded hover:border-cyan-400/50"
+                        title="Copy transaction hash"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Chat History */}
                 <div className="border-t border-cyan-400/20 pt-4 mt-4">

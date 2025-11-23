@@ -2,21 +2,21 @@
 
 export const privyConfig = {
   appearance: {
-    theme: 'dark',
-    accentColor: '#00ffff', // Cyan - EPOCH theme
+    theme: 'dark' as const,
+    accentColor: '#00ffff' as `#${string}`, // Cyan - EPOCH theme
     logo: '/favicon.ico',
   },
   // Enable multiple login methods
   // Note: 'wallet' enables all external wallets (MetaMask, Coinbase, WalletConnect, Rainbow, etc.)
-  loginMethods: ['email', 'google', 'wallet'] as const,
+  loginMethods: ['email', 'google', 'wallet'] as ('email' | 'google' | 'wallet')[],
   embeddedWallets: {
-    createOnLogin: 'all-users' as const,
+    ethereum: {
+      createOnLogin: 'all-users' as const,
+    },
   },
   // This enables all external wallet providers
   externalWallets: {
-    coinbaseWallet: {
-      connectionOptions: 'all',
-    },
+    coinbaseWallet: {},
   },
   defaultChain: {
     id: 84532,

@@ -255,6 +255,7 @@ async def get_user_negotiations(request: Dict[str, Any] = Body(...), limit: int 
                 agreed,
                 status,
                 payment_successful,
+                txn_hash,
                 created_at,
                 updated_at,
                 client_agent:client_agent_id(id, name, agent_type, category),

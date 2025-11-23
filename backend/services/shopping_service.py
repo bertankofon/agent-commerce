@@ -59,6 +59,14 @@ class ShoppingService:
 
             client_metadata = client_agent.get("metadata", {})
             client_name = client_metadata.get("name", f"Client_{str(client_agent_id)[:8]}")
+            
+            # Get user_id from client agent
+            user_id = None
+            if client_agent.get("user_id"):
+                try:
+                    user_id = UUID(client_agent.get("user_id"))
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid user_id format in client_agent: {client_agent.get('user_id')}")
 
             # Create shopping session ID
             session_id = str(uuid.uuid4())
@@ -149,7 +157,8 @@ class ShoppingService:
                             initial_price=initial_price,
                             negotiation_percentage=negotiation_percentage,
                             budget=budget,
-                            status="in_progress"
+                            status="in_progress",
+                            user_id=user_id
                         )
                         negotiation_id = UUID(negotiation_record["id"])
                         logger.info(f"Created negotiation record: {negotiation_id}")

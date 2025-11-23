@@ -60,7 +60,7 @@ export default function NegotiationViewer() {
           {/* Menu Bar */}
           <div className="bg-gradient-to-b from-[#F1F3FD] to-[#D9E4F5] border-b border-[#9CB0D7] px-2 py-1">
             <div className="text-sm font-bold text-gray-700">
-              {negotiation.buyer_name || "Buyer"} ↔ {negotiation.seller_name || "Seller"}
+              {negotiation.client_name || "Buyer"} ↔ {negotiation.merchant_name || "Seller"}
             </div>
           </div>
 
@@ -98,14 +98,14 @@ export default function NegotiationViewer() {
                   <div
                     key={idx}
                     className={`bg-gradient-to-b from-[#D4D0C8] to-[#B8B4AC] border-2 rounded p-4 ${
-                      round.speaker === "seller" ? "ml-12" : "mr-12"
+                      round.speaker === "merchant" ? "ml-12" : "mr-12"
                     }`}
                     style={{ borderColor: '#FFFFFF #404040 #404040 #FFFFFF' }}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <div className="font-bold text-sm">
-                          {round.speaker === "seller" ? "🏪 SELLER" : "🛒 BUYER"}
+                          {round.speaker === "merchant" ? "🏪 SELLER" : "🛒 BUYER"}
                         </div>
                         <div className="text-xs text-gray-600">Round {round.round}</div>
                       </div>

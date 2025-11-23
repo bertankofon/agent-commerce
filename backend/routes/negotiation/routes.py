@@ -10,7 +10,7 @@ from .models import (
     SingleNegotiationRequest,
     SingleNegotiationResponse
 )
-from database.supabase.operations import AgentsOperations
+from database.supabase.operations import AgentsOperations, NegotiationsOperations
 from database.supabase.client import get_supabase_client
 from utils.wallet import decrypt_pk
 from utils.chaoschain import get_agent_sdk, execute_x402_payment
@@ -387,6 +387,23 @@ async def negotiate_and_pay(request: NegotiateAndPayRequest):
                     best_offer=best_offer,
                     dry_run=request.dry_run
                 )
+                
+                # Save transaction hash and payment success to negotiation record if payment was successful
+                if payment_result and payment_result.get("status") == "success":
+                    negotiation_id = best_offer.get("negotiation_id")
+                    transaction_hash = payment_result.get("transaction_hash")
+                    
+                    if negotiation_id and transaction_hash:
+                        try:
+                            negotiations_ops = NegotiationsOperations()
+                            negotiations_ops.update_negotiation(
+                                negotiation_id=UUID(negotiation_id),
+                                txh_hash=transaction_hash,
+                                payment_successful=True
+                            )
+                            logger.info(f"Saved transaction hash {transaction_hash} and payment_successful=True to negotiation {negotiation_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to save transaction hash to negotiation: {str(e)}")
         
         # Prepare response
         return NegotiateAndPayResponse(
@@ -503,6 +520,27 @@ async def single_negotiation(request: SingleNegotiationRequest):
         best_offer = negotiation_result.get("best_offer")
         negotiation_history = negotiation_result.get("offers", [])
         
+        # Get user_id from client agent and save it to negotiation before end
+        user_id = None
+        if client_agent.get("user_id"):
+            try:
+                user_id = UUID(client_agent.get("user_id"))
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid user_id format in client_agent: {client_agent.get('user_id')}")
+        
+        # Update negotiation with user_id before negotiation ends
+        negotiation_id = best_offer.get("negotiation_id") if best_offer else None
+        if negotiation_id and user_id:
+            try:
+                negotiations_ops = NegotiationsOperations()
+                negotiations_ops.update_negotiation(
+                    negotiation_id=UUID(negotiation_id),
+                    user_id=user_id
+                )
+                logger.info(f"Saved user_id {user_id} to negotiation {negotiation_id}")
+            except Exception as e:
+                logger.warning(f"Failed to save user_id to negotiation: {str(e)}")
+        
         # Prepare base response
         response_data = {
             "status": "completed",
@@ -535,6 +573,22 @@ async def single_negotiation(request: SingleNegotiationRequest):
                 
                 if payment_result.get("status") == "success":
                     response_data["status"] = "completed_with_payment"
+                    
+                    # Save transaction hash and payment success to negotiation record
+                    negotiation_id = best_offer.get("negotiation_id")
+                    transaction_hash = payment_result.get("transaction_hash")
+                    
+                    if negotiation_id and transaction_hash:
+                        try:
+                            negotiations_ops = NegotiationsOperations()
+                            negotiations_ops.update_negotiation(
+                                negotiation_id=UUID(negotiation_id),
+                                txh_hash=transaction_hash,
+                                payment_successful=True
+                            )
+                            logger.info(f"Saved transaction hash {transaction_hash} and payment_successful=True to negotiation {negotiation_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to save transaction hash to negotiation: {str(e)}")
                 else:
                     response_data["status"] = "negotiation_success_payment_failed"
             else:

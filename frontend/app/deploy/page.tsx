@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createAgent, claimPixels } from "../lib/api";
@@ -25,7 +25,7 @@ interface SearchItem {
   quantity: number;
 }
 
-export default function DeployPage() {
+function DeployPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout } = usePrivy();
@@ -827,5 +827,17 @@ export default function DeployPage() {
         </div>
       </div>
     </AuthGuard>
+  );
+}
+
+export default function DeployPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-cyan-400 text-xl">Loading...</div>
+      </div>
+    }>
+      <DeployPageContent />
+    </Suspense>
   );
 }

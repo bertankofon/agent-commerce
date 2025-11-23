@@ -25,7 +25,8 @@ class NegotiationsOperations:
         initial_price: float,
         negotiation_percentage: Optional[float] = None,
         budget: Optional[float] = None,
-        status: str = "in_progress"
+        status: str = "in_progress",
+        user_id: Optional[UUID] = None
     ) -> Dict[str, Any]:
         """
         Create a new negotiation record.
@@ -39,6 +40,7 @@ class NegotiationsOperations:
             negotiation_percentage: Max discount percentage for merchant
             budget: Client's budget limit
             status: Negotiation status (in_progress, agreed, rejected, failed)
+            user_id: UUID of the user who owns the client agent
         
         Returns:
             Created negotiation record
@@ -59,6 +61,9 @@ class NegotiationsOperations:
             if budget is not None:
                 data["budget"] = budget
             
+            if user_id is not None:
+                data["user_id"] = str(user_id)
+            
             response = self.client.table(self.table).insert(data).execute()
             
             if not response.data:
@@ -76,7 +81,10 @@ class NegotiationsOperations:
         negotiation_id: UUID,
         final_price: Optional[float] = None,
         agreed: Optional[bool] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        txh_hash: Optional[str] = None,
+        payment_successful: Optional[bool] = None,
+        user_id: Optional[UUID] = None
     ) -> Dict[str, Any]:
         """
         Update a negotiation record with final results.
@@ -86,6 +94,9 @@ class NegotiationsOperations:
             final_price: Final negotiated price
             agreed: Whether agreement was reached
             status: Final status (agreed, rejected, failed)
+            txh_hash: Transaction hash from successful x402 payment
+            payment_successful: Whether the x402 payment was successfully executed
+            user_id: UUID of the user who owns the client agent
         
         Returns:
             Updated negotiation record
@@ -101,6 +112,15 @@ class NegotiationsOperations:
             
             if status:
                 update_data["status"] = status
+            
+            if txh_hash is not None:
+                update_data["txh_hash"] = txh_hash
+            
+            if payment_successful is not None:
+                update_data["payment_successful"] = payment_successful
+            
+            if user_id is not None:
+                update_data["user_id"] = str(user_id)
             
             update_data["updated_at"] = datetime.utcnow().isoformat()
             

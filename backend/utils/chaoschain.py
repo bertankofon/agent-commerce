@@ -385,10 +385,10 @@ def execute_x402_payment(
                 # Find USDC Transfer event
                 for log in tx_receipt.get('logs', []):
                     if log.get('address', '').lower() == usdc_contract.lower():
-                        if len(log.get('topics', [])) >= 3:
-                            to_address_hex = log['topics'][2].hex()
-                            to_address = '0x' + to_address_hex[-40:].lower()
-                            actual_recipient_address = Web3.to_checksum_address(to_address)
+                            if len(log.get('topics', [])) >= 3:
+                                to_address_hex = log['topics'][2].hex()
+                                to_address = '0x' + to_address_hex[-40:].lower()
+                                actual_recipient_address = Web3.to_checksum_address(to_address)
                             logger.info(f"   On-chain recipient: {actual_recipient_address}")
                             break
                 
