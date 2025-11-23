@@ -267,15 +267,26 @@ async def execute_payment_for_deal(
             enable_payments=True
         )
         
+        # Get public addresses
+        client_public_address = client_agent.get("public_address")
+        merchant_public_address = merchant_agent.get("public_address")
+        
+        if not merchant_public_address:
+            raise ValueError("Merchant agent missing public_address field - required for payment")
+        
         # Execute payment
         logger.info(f"Executing x402 payment: ${final_price} from {client_name} to {merchant_name}")
+        logger.info(f"Client address: {client_public_address}")
+        logger.info(f"Merchant address: {merchant_public_address}")
         payment_result = execute_x402_payment(
             client_sdk=client_sdk,
             merchant_sdk=merchant_sdk,
             product_name=product_name,
             final_price=final_price,
             negotiation_id=negotiation_id,
-            client_name=client_name
+            client_name=client_name,
+            client_public_address=client_public_address,
+            merchant_public_address=merchant_public_address
         )
         
         # Cleanup temp wallet files
