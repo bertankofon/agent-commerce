@@ -1,6 +1,6 @@
 # Agent Commerce 🤖💰
 
-An autonomous AI agent-based trading and negotiation system built with blockchain technology.
+An autonomous AI agent-based trading and negotiation system with pixel marketplace built on blockchain technology.
 
 ## Overview
 
@@ -15,10 +15,11 @@ The project consists of three main components:
 - Agent deployment interface
 - Real-time negotiation monitoring
 
-### 2. Backend (Express.js)
-- REST API server
-- Agent orchestration
-- Python agent lifecycle management
+### 2. Backend (FastAPI)
+- REST API server with FastAPI
+- Agent orchestration and negotiation engine
+- Supabase PostgreSQL database integration
+- LlamaIndex-based AI agents (ShoppingAgent & MerchantAgent)
 
 ### 3. AI Agents (Python)
 - **Eliza AI Framework**: Provides personality and decision-making
@@ -29,11 +30,14 @@ The project consists of three main components:
 
 ## Features
 
-- 🤖 **Autonomous Negotiation**: AI agents negotiate directly with each other
-- 💳 **Blockchain Payments**: Secure payments via ChaosChain SDK
-- 📦 **Inventory Management**: Real-time stock checking
-- 🔐 **Process Integrity**: AP2 protocol for secure agent communication
-- 💬 **Natural Language**: Agents communicate in natural language with structured JSON outputs
+- 🤖 **Autonomous Negotiation**: AI agents negotiate directly with each other using LlamaIndex
+- 💳 **Blockchain Payments**: Secure USDC payments via ChaosChain SDK (x402 protocol) on Base Sepolia
+- 🗺️ **Pixel Marketplace**: 75x30 interactive grid where merchants claim territory
+- 📦 **Product Management**: Merchants manage inventory with Supabase storage
+- 💰 **Agent Funding**: Direct USDC transfers to client agents via MetaMask
+- 📊 **Negotiation History**: Track all negotiations with detailed chat history
+- 🔐 **Privy Authentication**: Secure wallet-based authentication
+- 💬 **Natural Language**: Agents communicate in natural language with structured outputs
 
 ## Tech Stack
 
@@ -44,16 +48,21 @@ The project consists of three main components:
 - TailwindCSS
 
 **Backend:**
-- Express.js 5
-- TypeScript
-- CORS
+- FastAPI
+- Python 3.11+
+- LlamaIndex (ReActAgent)
+- Supabase (PostgreSQL + Storage)
+- OpenAI GPT-4o-mini
 
-**AI/Blockchain:**
-- Python 3.11
-- Eliza AI Framework
+**Blockchain:**
 - ChaosChain SDK
-- BASE Sepolia Testnet
-- GPT-4.1-mini
+- Base Sepolia Testnet
+- USDC Token (ERC-20)
+- x402 Payment Protocol
+
+**Authentication:**
+- Privy (Wallet-based auth)
+- MetaMask Integration
 
 ## Getting Started
 
@@ -77,18 +86,22 @@ cd frontend
 npm install
 ```
 
-3. Install backend dependencies:
+3. Set up backend Python environment:
 ```bash
 cd ../backend
-npm install
-```
-
-4. Set up Python virtual environment:
-```bash
-cd ../agents
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+4. Configure environment variables:
+```bash
+# Backend (.env)
+cp .env.example .env
+# Add: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY, BASE_SEPOLIA_RPC_URL
+
+# Frontend (.env.local)
+# Add: NEXT_PUBLIC_PRIVY_APP_ID, NEXT_PUBLIC_BACKEND_URL, NEXT_PUBLIC_SUPABASE_URL
 ```
 
 ### Running the Application
