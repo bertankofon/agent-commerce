@@ -70,6 +70,88 @@ def encrypt_pk(private_key: str, user_secret: str = None) -> str:
         raise
 
 
+def decrypt_pk(encrypted_private_key: str, user_secret: str = None) -> str:
+    """
+    Decrypt a private key using NaCl secret box.
+    Also handles plaintext private keys for backward compatibility.
+    
+    Args:
+        encrypted_private_key: Base64-encoded encrypted private key OR plaintext hex string
+        user_secret: Secret key for decryption (defaults to env var)
+    
+    Returns:
+        Decrypted private key (hex string, without 0x prefix)
+    """
+    try:
+        # DEBUG: Print what we received
+        logger.info(f"DEBUG: Attempting to decrypt private key")
+        logger.info(f"DEBUG: Key length: {len(encrypted_private_key) if encrypted_private_key else 0}")
+        logger.info(f"DEBUG: Key preview (first 50 chars): {encrypted_private_key[:50] if encrypted_private_key else 'None'}...")
+        logger.info(f"DEBUG: Key preview (last 50 chars): ...{encrypted_private_key[-50:] if encrypted_private_key and len(encrypted_private_key) > 50 else encrypted_private_key}")
+        
+        # First, check if it's already a plaintext private key
+        # Private keys are 64 hex characters (32 bytes), optionally prefixed with 0x
+        cleaned_key = encrypted_private_key.strip()
+        if cleaned_key.startswith("0x"):
+            cleaned_key = cleaned_key[2:]
+        
+        # Check if it looks like a plaintext hex private key (64 hex chars)
+        if len(cleaned_key) == 64 and all(c in '0123456789abcdefABCDEF' for c in cleaned_key):
+            logger.info("DEBUG: Private key appears to be in plaintext format (64 hex chars), returning as-is")
+            return cleaned_key.lower()  # Return lowercase hex without 0x prefix
+        
+        # If not plaintext, try to decrypt it
+        # Get user secret from parameter or environment variable
+        if user_secret is None:
+            user_secret = os.getenv("USER_SECRET_KEY")
+            if not user_secret:
+                raise ValueError(
+                    "USER_SECRET_KEY must be set in environment variables or passed as parameter"
+                )
+        
+        logger.info(f"DEBUG: USER_SECRET_KEY length: {len(user_secret)}")
+        logger.info(f"DEBUG: USER_SECRET_KEY preview: {user_secret[:10]}...")
+        
+        # Generate key from user secret using SHA256 hash
+        key = hashlib.sha256(user_secret.encode()).digest()
+        
+        # Ensure key is exactly 32 bytes (SecretBox.KEY_SIZE)
+        if len(key) != secret.SecretBox.KEY_SIZE:
+            key = key[:secret.SecretBox.KEY_SIZE]
+        
+        # Decode base64-encoded encrypted data
+        try:
+            encrypted_data = base64.b64decode(encrypted_private_key.encode())
+            logger.info(f"DEBUG: Successfully decoded base64, encrypted data length: {len(encrypted_data)}")
+        except Exception as e:
+            logger.error(f"DEBUG: Failed to base64 decode private key. Error: {str(e)}")
+            # If base64 decode fails, check if it's a hex string
+            if all(c in '0123456789abcdefABCDEF' for c in cleaned_key):
+                logger.warning("DEBUG: Private key appears to be plaintext hex (not base64), returning as-is")
+                return cleaned_key.lower()
+            raise ValueError(f"Invalid encrypted private key format: {str(e)}")
+        
+        # Create secret box and decrypt
+        box = secret.SecretBox(key)
+        logger.info("DEBUG: Attempting decryption with SecretBox...")
+        decrypted = box.decrypt(encrypted_data)
+        logger.info(f"DEBUG: Decryption successful! Decrypted length: {len(decrypted)}")
+        
+        # Return decrypted private key as string (remove 0x if present)
+        decrypted_str = decrypted.decode()
+        if decrypted_str.startswith("0x"):
+            decrypted_str = decrypted_str[2:]
+        logger.info(f"DEBUG: Final decrypted key preview: {decrypted_str[:20]}...")
+        return decrypted_str
+        
+    except Exception as e:
+        logger.error(f"Error decrypting private key: {str(e)}")
+        logger.error(f"DEBUG: Full error traceback:")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
+
+
 def send_eth_to_wallet(
     recipient_address: str,
     amount_eth: str,

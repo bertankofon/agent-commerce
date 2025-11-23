@@ -12,6 +12,7 @@ dependencies = [
     "llama-index>=0.12.52",
     "pandas>=2.3.3",
     "pydantic>=2.12.4",
+    "pynacl>=1.6.1",
     "python-dotenv>=1.2.1",
     "python-multipart>=0.0.20",
     "requests>=2.32.5",
