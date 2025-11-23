@@ -57,14 +57,13 @@ class ShoppingAgent:
             memory = ChatMemoryBuffer.from_defaults()
 
             # Initialize ReAct agent (direct instantiation for llama-index 0.14+)
+            # Note: system_prompt is not a valid parameter for ReActAgent.__init__()
+            # The system prompt is handled in direct LLM calls during negotiation
             self.agent = ReActAgent(
-                name=agent_name,
-                description="AI shopping agent that negotiates product prices",
                 tools=self.tools,
                 llm=self.llm,
                 memory=memory,
-                verbose=True,
-                system_prompt=self._get_system_prompt()
+                verbose=True
             )
 
             logger.info(f"ShoppingAgent initialized: {agent_name} (ID: {agent_id})")

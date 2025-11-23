@@ -147,3 +147,18 @@ export async function getNegotiation(id: string) {
   const res = await fetch(`${API_BASE}/api/negotiations/${id}`);
   return res.json();
 }
+
+export async function getUserNegotiations(userId: string) {
+  const res = await fetch(`${API_BASE}/negotiation/list/user/negotiations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId })
+  });
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `API error: ${res.status}`);
+  }
+  
+  return res.json();
+}

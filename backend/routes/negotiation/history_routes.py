@@ -5,7 +5,7 @@ Endpoints to fetch negotiation history and chat messages.
 """
 
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 from typing import Dict, Any, List
 from uuid import UUID
 
@@ -190,5 +190,110 @@ async def get_negotiation_session(session_id: str):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch session negotiations: {str(e)}"
+        )
+
+
+@router.post("/list/user/negotiations")
+async def get_user_negotiations(request: Dict[str, Any] = Body(...), limit: int = 50):
+    """
+    Get all negotiations for a specific user.
+    Returns negotiations where the client_agent belongs to the user.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Get user_id from request body
+        user_id = request.get("user_id")
+        if not user_id:
+            raise HTTPException(
+                status_code=400,
+                detail="user_id is required in request body"
+            )
+        
+        # Validate user_id format
+        try:
+            user_uuid = UUID(user_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid user_id format: {user_id}"
+            )
+        
+        # First, get all client agents for this user
+        agents_response = supabase.table("agents")\
+            .select("id")\
+            .eq("user_id", str(user_uuid))\
+            .eq("agent_type", "client")\
+            .execute()
+        
+        client_agent_ids = [agent["id"] for agent in (agents_response.data or [])]
+        
+        if not client_agent_ids:
+            # No client agents for this user, return empty list
+            return {
+                "success": True,
+                "user_id": user_id,
+                "negotiations": [],
+                "count": 0
+            }
+        
+        # Get negotiations where client_agent_id is in the list
+        # Build OR query for multiple agent IDs
+        or_conditions = ",".join([f"client_agent_id.eq.{agent_id}" for agent_id in client_agent_ids])
+        
+        response = supabase.table("negotiations")\
+            .select("""
+                id,
+                session_id,
+                client_agent_id,
+                merchant_agent_id,
+                product_id,
+                initial_price,
+                final_price,
+                negotiation_percentage,
+                budget,
+                agreed,
+                status,
+                payment_successful,
+                created_at,
+                updated_at,
+                client_agent:client_agent_id(id, name, agent_type, category),
+                merchant_agent:merchant_agent_id(id, name, agent_type, category)
+            """)\
+            .or_(or_conditions)\
+            .order("created_at", desc=True)\
+            .limit(limit)\
+            .execute()
+        
+        negotiations = response.data or []
+        
+        # Add chat history for each negotiation
+        for negotiation in negotiations:
+            chat_response = supabase.table("agent_chat_history")\
+                .select("""
+                    *,
+                    sender:sender_agent_id(id, name),
+                    receiver:receiver_agent_id(id, name)
+                """)\
+                .eq("negotiation_id", negotiation["id"])\
+                .order("round_number", desc=False)\
+                .execute()
+            
+            negotiation["chat_history"] = chat_response.data or []
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "negotiations": negotiations,
+            "count": len(negotiations)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user negotiations: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch user negotiations: {str(e)}"
         )
 

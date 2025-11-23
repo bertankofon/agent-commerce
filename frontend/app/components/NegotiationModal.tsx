@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { usePrivy } from '@privy-io/react-auth';
 import { getCategoryColor } from "../lib/categories";
+import { getUserByPrivyId } from "../lib/auth";
+import { getUserNegotiations } from "../lib/api";
 
 // Get backend URL from environment variable
 // Supports multiple possible variable names
@@ -28,12 +31,14 @@ interface Negotiation {
   session_id: string;
   client_agent: { id: string; name: string; category?: string };
   merchant_agent: { id: string; name: string; category?: string };
-  product: { id: string; name: string; price: number; image_url?: string };
+  product?: { id: string; name: string; price: number; image_url?: string };
+  product_id?: string;
   initial_price: number;
   final_price?: number;
   budget?: number;
   agreed: boolean;
   status: string;
+  payment_successful?: boolean | null;
   chat_history: ChatMessage[];
   created_at: string;
 }
@@ -77,23 +82,39 @@ export default function NegotiationModal({
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Negotiation[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [databaseUserId, setDatabaseUserId] = useState<string | null>(null);
 
+  const { user } = usePrivy();
   const categoryColor = getCategoryColor(merchantCategory);
 
-  // Load negotiation history when modal opens
+  // Load database user ID when modal opens
   useEffect(() => {
-    if (isOpen && productId) {
+    if (isOpen && user?.id) {
+      const loadDatabaseUserId = async () => {
+        try {
+          const userRecord = await getUserByPrivyId(user.id);
+          setDatabaseUserId(userRecord.id);
+        } catch (err) {
+          console.error("Failed to load database user ID:", err);
+        }
+      };
+      loadDatabaseUserId();
+    }
+  }, [isOpen, user]);
+
+  // Load negotiation history when modal opens and databaseUserId is available
+  useEffect(() => {
+    if (isOpen && databaseUserId) {
       loadNegotiationHistory();
     }
-  }, [isOpen, productId]);
+  }, [isOpen, databaseUserId]);
 
   const loadNegotiationHistory = async () => {
+    if (!databaseUserId) return;
+    
     try {
       setLoadingHistory(true);
-      const response = await fetch(
-        `${API_BASE}/negotiation/history/product/${productId}`
-      );
-      const data = await response.json();
+      const data = await getUserNegotiations(databaseUserId);
       
       if (data.success) {
         setHistory(data.negotiations || []);
@@ -139,12 +160,18 @@ export default function NegotiationModal({
       }
 
       // Reload history and show the latest negotiation
-      await loadNegotiationHistory();
-      
-      // Find latest negotiation
-      const latestNeg = await fetchLatestNegotiation();
-      if (latestNeg) {
-        setNegotiationResult(latestNeg);
+      if (databaseUserId) {
+        await loadNegotiationHistory();
+        
+        // Fetch the updated history to get the latest negotiation
+        try {
+          const data = await getUserNegotiations(databaseUserId);
+          if (data.success && data.negotiations && data.negotiations.length > 0) {
+            setNegotiationResult(data.negotiations[0]); // Most recent
+          }
+        } catch (err) {
+          console.error("Failed to fetch latest negotiation:", err);
+        }
       }
     } catch (err: any) {
       console.error("Negotiation error:", err);
@@ -154,22 +181,6 @@ export default function NegotiationModal({
     }
   };
 
-  const fetchLatestNegotiation = async (): Promise<Negotiation | null> => {
-    try {
-      const response = await fetch(
-        `${API_BASE}/negotiation/history/product/${productId}`
-      );
-      const data = await response.json();
-      
-      if (data.success && data.negotiations && data.negotiations.length > 0) {
-        return data.negotiations[0]; // Most recent
-      }
-      return null;
-    } catch (err) {
-      console.error("Failed to fetch latest negotiation:", err);
-      return null;
-    }
-  };
 
   const formatPrice = (price: number) => {
     return `$${price.toFixed(2)}`;
@@ -180,8 +191,28 @@ export default function NegotiationModal({
     return date.toLocaleString();
   };
 
-  const getStatusColor = (status: string, agreed: boolean) => {
-    if (agreed) return "text-green-400 border-green-400/50 bg-green-400/10";
+  const getStatusColor = (status: string, agreed: boolean, payment_successful?: boolean | null | string | number) => {
+    // More robust check for payment_successful - handle boolean, string, number, null, undefined
+    const paymentValue = payment_successful;
+    const isPaymentSuccessful = 
+      paymentValue === true || 
+      (typeof paymentValue === "string" && paymentValue === "true") || 
+      (typeof paymentValue === "number" && paymentValue === 1) ||
+      (paymentValue !== null && paymentValue !== undefined && String(paymentValue).toLowerCase() === "true");
+    
+    // Green: payment was successful
+    if (isPaymentSuccessful) {
+      return "text-green-400 border-green-400/50 bg-green-400/10";
+    }
+    // Blue: agreed but payment not successful (false, null, or undefined)
+    if (agreed && !isPaymentSuccessful) {
+      return "text-blue-400 border-blue-400/50 bg-blue-400/10";
+    }
+    // Red: not agreed
+    if (!agreed) {
+      return "text-red-400 border-red-400/50 bg-red-400/10";
+    }
+    // Fallback for edge cases
     if (status === "rejected") return "text-red-400 border-red-400/50 bg-red-400/10";
     if (status === "failed") return "text-orange-400 border-orange-400/50 bg-orange-400/10";
     return "text-cyan-400 border-cyan-400/50 bg-cyan-400/10";
@@ -336,35 +367,74 @@ export default function NegotiationModal({
                 No previous negotiations
               </div>
             ) : (
-              history.map((neg) => (
+              history.map((neg) => {
+                // Debug logging
+                console.log('Negotiation:', {
+                  id: neg.id,
+                  agreed: neg.agreed,
+                  payment_successful: neg.payment_successful,
+                  payment_successful_type: typeof neg.payment_successful,
+                  status: neg.status
+                });
+                
+                // More robust check for payment_successful
+                const paymentValue = neg.payment_successful;
+                const isPaymentSuccessful = 
+                  paymentValue === true || 
+                  (typeof paymentValue === "string" && paymentValue === "true") || 
+                  (typeof paymentValue === "number" && paymentValue === 1) ||
+                  (paymentValue !== null && paymentValue !== undefined && String(paymentValue).toLowerCase() === "true");
+                
+                const statusColor = getStatusColor(neg.status, neg.agreed, neg.payment_successful);
+                const borderColor = isPaymentSuccessful 
+                  ? "border-green-400/40 hover:border-green-400/60" 
+                  : neg.agreed && !isPaymentSuccessful
+                  ? "border-blue-400/40 hover:border-blue-400/60"
+                  : !neg.agreed
+                  ? "border-red-400/40 hover:border-red-400/60"
+                  : "border-cyan-400/20 hover:border-cyan-400/40";
+                
+                return (
                 <div
                   key={neg.id}
                   onClick={() => setNegotiationResult(neg)}
-                  className="border-2 border-cyan-400/20 rounded-xl p-4 bg-black/20 hover:border-cyan-400/40 transition-all cursor-pointer"
+                  className={`border-2 ${borderColor} rounded-xl p-4 transition-all cursor-pointer ${
+                    isPaymentSuccessful ? 'bg-green-400/10' : 'bg-black/20'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <div className="text-cyan-400 font-semibold text-sm">
-                        {neg.client_agent.name}
-                      </div>
-                      <div className="text-cyan-400/60 text-xs">
-                        {formatDate(neg.created_at)}
+                    <div className="flex items-center gap-2">
+                      {isPaymentSuccessful && (
+                        <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                      )}
+                      <div>
+                        <div className="text-cyan-400 font-semibold text-sm">
+                          {neg.client_agent.name}
+                        </div>
+                        <div className="text-cyan-400/60 text-xs">
+                          {formatDate(neg.created_at)}
+                        </div>
                       </div>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full border ${getStatusColor(neg.status, neg.agreed)}`}>
-                      {neg.agreed ? '✓ AGREED' : '✗ ' + neg.status.toUpperCase()}
+                    <span className={`text-xs px-2 py-1 rounded-full border ${statusColor}`}>
+                      {isPaymentSuccessful 
+                        ? '✓ PAID' 
+                        : neg.agreed 
+                        ? '✓ AGREED' 
+                        : '✗ ' + neg.status.toUpperCase()}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-cyan-400/70">{formatPrice(neg.initial_price)}</span>
                     {neg.final_price && (
-                      <span className="text-green-400 font-semibold">
+                      <span className={`font-semibold ${isPaymentSuccessful ? 'text-green-400' : 'text-green-400'}`}>
                         → {formatPrice(neg.final_price)}
                       </span>
                     )}
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -386,9 +456,35 @@ export default function NegotiationModal({
                     <h3 className="text-2xl font-bold text-cyan-400 mb-2">
                       {negotiationResult.agreed ? "✅ Deal Agreed!" : "❌ No Agreement"}
                     </h3>
-                    <span className={`text-xs px-3 py-1 rounded-full border ${getStatusColor(negotiationResult.status, negotiationResult.agreed)}`}>
-                      {negotiationResult.status.toUpperCase()}
-                    </span>
+                    <div className="flex gap-2 items-center">
+                      <span className={`text-xs px-3 py-1 rounded-full border ${getStatusColor(negotiationResult.status, negotiationResult.agreed, negotiationResult.payment_successful)}`}>
+                        {negotiationResult.status.toUpperCase()}
+                      </span>
+                      {(() => {
+                        const paymentValue = negotiationResult.payment_successful;
+                        const isPaid = paymentValue === true || 
+                          (typeof paymentValue === "string" && paymentValue === "true") || 
+                          (typeof paymentValue === "number" && paymentValue === 1) ||
+                          (paymentValue !== null && paymentValue !== undefined && String(paymentValue).toLowerCase() === "true");
+                        return isPaid;
+                      })() && (
+                        <span className="text-xs px-3 py-1 rounded-full border text-green-400 border-green-400/50 bg-green-400/10">
+                          💰 PAID
+                        </span>
+                      )}
+                      {(() => {
+                        const paymentValue = negotiationResult.payment_successful;
+                        const isPaid = paymentValue === true || 
+                          (typeof paymentValue === "string" && paymentValue === "true") || 
+                          (typeof paymentValue === "number" && paymentValue === 1) ||
+                          (paymentValue !== null && paymentValue !== undefined && String(paymentValue).toLowerCase() === "true");
+                        return negotiationResult.agreed && !isPaid;
+                      })() && (
+                        <span className="text-xs px-3 py-1 rounded-full border text-blue-400 border-blue-400/50 bg-blue-400/10">
+                          ⏳ PENDING PAYMENT
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-cyan-400/60 text-sm">Final Price</div>
