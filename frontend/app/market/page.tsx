@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { usePrivy } from '@privy-io/react-auth';
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getMyAgents, getLiveAgents, updateAgentStatus, getAgentProducts } from "../lib/api";
+import { getMyAgents, getLiveAgents, updateAgentStatus, getAgentProducts, getAllPixelClaims } from "../lib/api";
 import ProductsModal from "../components/ProductsModal";
+import { getCategoryColor, getCategoryById } from "../lib/categories";
 
 interface Product {
   id: string;
@@ -26,17 +27,39 @@ interface Agent {
   owner?: string;
   products_count: number;
   created_at: string;
+  category?: string;
+}
+
+interface PixelClaim {
+  x: number;
+  y: number;
+  agent_id: string;
+  agents?: {
+    name: string;
+    category: string;
+    avatar_url?: string;
+  };
 }
 
 export default function MarketPage() {
   const router = useRouter();
   const { authenticated, user } = usePrivy();
-  const [activeTab, setActiveTab] = useState<'my-agents' | 'market'>('my-agents');
+  const [activeTab, setActiveTab] = useState<'my-agents' | 'market' | 'pixel-map'>('pixel-map');
   const [myAgents, setMyAgents] = useState<Agent[]>([]);
   const [marketAgents, setMarketAgents] = useState<Agent[]>([]);
+  const [pixelClaims, setPixelClaims] = useState<PixelClaim[]>([]);
+  const [hoveredPixel, setHoveredPixel] = useState<PixelClaim | null>(null);
+  const [lastHoveredPixel, setLastHoveredPixel] = useState<PixelClaim | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pixelsLoading, setPixelsLoading] = useState(false);
   const [error, setError] = useState("");
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  
+  // Pixel Selection for Merchant Deploy
+  const [isSelectingPixels, setIsSelectingPixels] = useState(false);
+  const [selectedPixels, setSelectedPixels] = useState<Array<{x: number, y: number}>>([]);
+  const [dragStart, setDragStart] = useState<{x: number, y: number} | null>(null);
+  const [dragEnd, setDragEnd] = useState<{x: number, y: number} | null>(null);
   
   // Products Modal State
   const [showProductsModal, setShowProductsModal] = useState(false);
@@ -63,26 +86,54 @@ export default function MarketPage() {
   }, []);
 
   async function loadData() {
-    setLoading(true);
+    const isInitialLoad = loading;
+    
+    if (isInitialLoad) {
+      setLoading(true);
+    } else {
+      setPixelsLoading(true);
+    }
+    
     setError("");
     
     try {
-      // Load my agents
-      if (user?.wallet?.address) {
-        const myData = await getMyAgents(user.wallet.address);
-        setMyAgents(myData.agents || []);
+      // Load data based on active tab for faster initial load
+      if (activeTab === 'pixel-map') {
+        // Only load pixel claims for pixel map tab
+        const pixelData = await getAllPixelClaims();
+        setPixelClaims(pixelData.pixels || []);
+      } else {
+        // Load agents data in parallel
+        const promises: Promise<any>[] = [
+          getLiveAgents().then(data => setMarketAgents(data.agents || []))
+        ];
+        
+        if (user?.wallet?.address) {
+          promises.push(
+            getMyAgents(user.wallet.address).then(data => setMyAgents(data.agents || []))
+          );
+        }
+        
+        await Promise.all(promises);
       }
-      
-      // Load market agents
-      const marketData = await getLiveAgents();
-      setMarketAgents(marketData.agents || []);
     } catch (err: any) {
       console.error("Failed to load agents:", err);
       setError("Failed to load agents");
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setLoading(false);
+      } else {
+        setPixelsLoading(false);
+      }
     }
   }
+
+  // Load data when tab changes (except initial load)
+  useEffect(() => {
+    if (authenticated && !loading) {
+      loadData();
+    }
+  }, [activeTab]);
 
   async function handleToggleStatus(agentId: string, currentStatus: string) {
     try {
@@ -136,6 +187,105 @@ export default function MarketPage() {
     }
   }
 
+  function handlePixelMouseDown(x: number, y: number) {
+    if (!isSelectingPixels) return;
+    const isOccupied = pixelClaims.some(c => c.x === x && c.y === y);
+    if (isOccupied) return;
+    
+    setDragStart({ x, y });
+    setDragEnd({ x, y });
+  }
+
+  function handlePixelMouseMove(x: number, y: number) {
+    if (!isSelectingPixels || !dragStart) return;
+    setDragEnd({ x, y });
+  }
+
+  function handlePixelMouseUp() {
+    if (!isSelectingPixels || !dragStart || !dragEnd) return;
+
+    const minX = Math.min(dragStart.x, dragEnd.x);
+    const maxX = Math.max(dragStart.x, dragEnd.x);
+    const minY = Math.min(dragStart.y, dragEnd.y);
+    const maxY = Math.max(dragStart.y, dragEnd.y);
+
+    const newPixels: Array<{x: number, y: number}> = [];
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const isOccupied = pixelClaims.some(c => c.x === x && c.y === y);
+        if (!isOccupied) {
+          newPixels.push({ x, y });
+        }
+      }
+    }
+
+    if (newPixels.length > 100) {
+      setError("Maximum 100 pixels allowed!");
+      setDragStart(null);
+      setDragEnd(null);
+      return;
+    }
+
+    setSelectedPixels(newPixels);
+    setDragStart(null);
+    setDragEnd(null);
+  }
+
+  function isInDragArea(x: number, y: number): boolean {
+    if (!dragStart || !dragEnd) return false;
+    const minX = Math.min(dragStart.x, dragEnd.x);
+    const maxX = Math.max(dragStart.x, dragEnd.x);
+    const minY = Math.min(dragStart.y, dragEnd.y);
+    const maxY = Math.max(dragStart.y, dragEnd.y);
+    return x >= minX && x <= maxX && y >= minY && y <= maxY;
+  }
+
+  function handleStartMerchantDeploy() {
+    setIsSelectingPixels(true);
+    setSelectedPixels([]);
+    setError("");
+  }
+
+  function handleCancelSelection() {
+    setIsSelectingPixels(false);
+    setSelectedPixels([]);
+    setDragStart(null);
+    setDragEnd(null);
+  }
+
+  function handleDeployMerchant() {
+    if (selectedPixels.length === 0) {
+      setError("Please select pixels first!");
+      return;
+    }
+    // Redirect to deploy page with pixels
+    const pixelsParam = encodeURIComponent(JSON.stringify(selectedPixels));
+    router.push(`/deploy?type=merchant&pixels=${pixelsParam}`);
+  }
+
+  function handleDeployClient() {
+    // Redirect to deploy page for client
+    router.push(`/deploy?type=client`);
+  }
+
+  // Memoize pixel claims map for O(1) lookup
+  const pixelClaimsMap = useMemo(() => {
+    const map = new Map<string, PixelClaim>();
+    pixelClaims.forEach(claim => {
+      map.set(`${claim.x},${claim.y}`, claim);
+    });
+    return map;
+  }, [pixelClaims]);
+
+  // Memoize selected pixels set for O(1) lookup
+  const selectedPixelsSet = useMemo(() => {
+    const set = new Set<string>();
+    selectedPixels.forEach(p => {
+      set.add(`${p.x},${p.y}`);
+    });
+    return set;
+  }, [selectedPixels]);
+
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
       {/* Background */}
@@ -166,6 +316,16 @@ export default function MarketPage() {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8">
+            <button
+              onClick={() => setActiveTab('pixel-map')}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                activeTab === 'pixel-map'
+                  ? 'bg-cyan-400/20 text-cyan-400 border-2 border-cyan-400'
+                  : 'bg-black/40 text-cyan-400/60 border-2 border-cyan-400/20 hover:border-cyan-400/40'
+              }`}
+            >
+              PIXEL MAP
+            </button>
             <button
               onClick={() => setActiveTab('my-agents')}
               className={`px-6 py-3 rounded-xl font-semibold transition-all ${
@@ -202,6 +362,189 @@ export default function MarketPage() {
             </div>
           ) : (
             <>
+              {/* Pixel Map Tab */}
+              {activeTab === 'pixel-map' && (
+                <div className="flex flex-col items-center justify-center min-h-[600px]">
+                  {/* Deploy Buttons - Above Grid */}
+                  <div className="mb-8 flex gap-4">
+                    {isSelectingPixels ? (
+                      <>
+                        <button
+                          onClick={handleCancelSelection}
+                          className="px-8 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                        >
+                          ✕ Cancel
+                        </button>
+                        <button
+                          onClick={handleDeployMerchant}
+                          disabled={selectedPixels.length === 0}
+                          className="px-10 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                        >
+                          🏪 Deploy Store ({selectedPixels.length} pixels)
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={handleDeployClient}
+                          className="px-10 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                        >
+                          👤 Deploy Client
+                        </button>
+                        <button
+                          onClick={handleStartMerchantDeploy}
+                          className="px-10 py-4 bg-cyan-400 border-2 border-cyan-400 rounded-xl text-black hover:bg-cyan-300 transition-all font-bold flex items-center gap-3 text-base shadow-lg shadow-cyan-400/50"
+                        >
+                          🏪 Deploy Merchant
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Status Text */}
+                  {isSelectingPixels && (
+                    <p className="text-cyan-400/60 text-sm mb-4">
+                      🎨 Drag to select pixels • {selectedPixels.length}/100 selected
+                    </p>
+                  )}
+
+                  {/* Pixel Grid - Centered, Extra Large */}
+                  <div className="border-2 border-cyan-400/30 rounded-xl p-6 bg-black/50 backdrop-blur-sm">
+                    <div 
+                      className="grid gap-0"
+                      style={{
+                        gridTemplateColumns: `repeat(50, 20px)`,
+                        width: "fit-content"
+                      }}
+                    >
+                        {Array.from({ length: 50 * 20 }, (_, i) => {
+                          const x = i % 50;
+                          const y = Math.floor(i / 50);
+                          const key = `${x},${y}`;
+                          const claim = pixelClaimsMap.get(key);
+                          const isSelected = selectedPixelsSet.has(key);
+                          const isInDrag = isInDragArea(x, y);
+                          
+                          let bgColor = "#0a0a0a";
+                          let borderColor = "#1a1a1a";
+                          let opacity = 0.3;
+                          let cursor = "default";
+                          
+                          if (claim && claim.agents) {
+                            bgColor = getCategoryColor(claim.agents.category || 'TECH');
+                            borderColor = bgColor;
+                            opacity = 0.8;
+                            cursor = isSelectingPixels ? "not-allowed" : "pointer";
+                          } else if (isSelectingPixels) {
+                            cursor = "crosshair";
+                            if (isSelected) {
+                              bgColor = "#00D9FF";
+                              borderColor = "#00D9FF";
+                              opacity = 0.7;
+                            } else if (isInDrag) {
+                              bgColor = "#00D9FF";
+                              borderColor = "#00D9FF";
+                              opacity = 0.4;
+                            }
+                          }
+                          
+                          return (
+                            <div
+                              key={`${x}-${y}`}
+                              onMouseEnter={() => {
+                                if (!isSelectingPixels) {
+                                  setHoveredPixel(claim || null);
+                                  if (claim) {
+                                    setLastHoveredPixel(claim);
+                                  }
+                                }
+                              }}
+                              onMouseLeave={() => setHoveredPixel(null)}
+                              onMouseDown={() => handlePixelMouseDown(x, y)}
+                              onMouseMove={() => handlePixelMouseMove(x, y)}
+                              onMouseUp={handlePixelMouseUp}
+                              onClick={() => {
+                                if (!isSelectingPixels && claim) {
+                                  handleViewProducts({ 
+                                    id: claim.agent_id, 
+                                    name: claim.agents?.name || '',
+                                    agent_type: 'merchant',
+                                    status: 'live',
+                                    avatar_url: claim.agents?.avatar_url,
+                                    products_count: 0,
+                                    created_at: '',
+                                    category: claim.agents?.category
+                                  } as Agent);
+                                }
+                              }}
+                              style={{
+                                width: "20px",
+                                height: "20px",
+                                backgroundColor: bgColor,
+                                border: `1px solid ${borderColor}`,
+                                opacity,
+                                cursor,
+                                transition: "all 0.1s ease",
+                                boxShadow: (claim || isSelected) ? `0 0 8px ${bgColor}50` : "none",
+                                userSelect: "none"
+                              }}
+                              className={claim && !isSelectingPixels ? "hover:scale-110 hover:opacity-100" : ""}
+                            />
+                          );
+                        })}
+                      </div>
+                  </div>
+
+                  {/* Hover Info - Below Grid (Sticky) */}
+                  <div className="mt-8 w-[500px]">
+                    {(hoveredPixel || lastHoveredPixel) && (hoveredPixel?.agents || lastHoveredPixel?.agents) ? (
+                      <div className="border-2 border-cyan-400/50 rounded-xl p-6 bg-black/60 backdrop-blur-sm">
+                        <div className="flex items-center gap-5">
+                          {(hoveredPixel?.agents?.avatar_url || lastHoveredPixel?.agents?.avatar_url) && (
+                            <div className="text-5xl">
+                              {hoveredPixel?.agents?.avatar_url || lastHoveredPixel?.agents?.avatar_url}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <h3 className="text-xl font-bold text-cyan-300 mb-2">
+                              {hoveredPixel?.agents?.name || lastHoveredPixel?.agents?.name}
+                            </h3>
+                            <p className="text-cyan-400/70 text-sm">
+                              {getCategoryById((hoveredPixel?.agents?.category || lastHoveredPixel?.agents?.category) as string)?.emoji}{' '}
+                              {getCategoryById((hoveredPixel?.agents?.category || lastHoveredPixel?.agents?.category) as string)?.name}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const pixel = hoveredPixel || lastHoveredPixel;
+                              if (pixel) {
+                                handleViewProducts({ 
+                                  id: pixel.agent_id, 
+                                  name: pixel.agents?.name || '',
+                                  agent_type: 'merchant',
+                                  status: 'live',
+                                  avatar_url: pixel.agents?.avatar_url,
+                                  products_count: 0,
+                                  created_at: '',
+                                  category: pixel.agents?.category
+                                } as Agent);
+                              }
+                            }}
+                            className="px-6 py-3 bg-cyan-400/10 border-2 border-cyan-400 rounded-lg text-cyan-400 hover:bg-cyan-400/20 transition-all font-bold text-sm"
+                          >
+                            View Store
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-cyan-400/20 rounded-xl p-6 bg-black/30 text-center text-cyan-400/40">
+                        <p className="text-base">🗺️ Hover over a claimed pixel to see merchant details</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* My Agents Tab */}
               {activeTab === 'my-agents' && (
                 <div className="space-y-4">

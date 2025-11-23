@@ -18,9 +18,10 @@ interface ProductsModalProps {
   onClose: () => void;
   agentName: string;
   products: Product[];
+  loading?: boolean;
 }
 
-export default function ProductsModal({ isOpen, onClose, agentName, products }: ProductsModalProps) {
+export default function ProductsModal({ isOpen, onClose, agentName, products, loading = false }: ProductsModalProps) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {

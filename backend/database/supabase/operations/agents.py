@@ -24,7 +24,8 @@ class AgentsOperations:
         encrypted_private_key: Optional[str] = None,
         agent_type: Optional[str] = None,
         name: Optional[str] = None,
-        owner: Optional[str] = None
+        owner: Optional[str] = None,
+        category: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new agent record in the agents table.
@@ -74,6 +75,9 @@ class AgentsOperations:
             
             if owner:
                 data["owner"] = owner
+            
+            if category:
+                data["category"] = category
             
             response = self.client.table(self.table).insert(data).execute()
             

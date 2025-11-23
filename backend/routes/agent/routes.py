@@ -169,6 +169,7 @@ async def deploy_agent(
     domain: str = Form(...),
     image: Optional[UploadFile] = File(None),
     preset_avatar: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),  # Merchant category: TECH, FASHION, etc.
     description: Optional[str] = Form(None),
     products_json: Optional[str] = Form(None),
     search_items_json: Optional[str] = Form(None),
@@ -344,7 +345,8 @@ async def deploy_agent(
             encrypted_private_key=encrypted_private_key,
             agent_type=agent_type_lower,
             name=str(name).strip(),
-            owner=agent_owner
+            owner=agent_owner,
+            category=category if agent_type_lower == "merchant" else None
         )
         db_agent_id = agent_record["id"]
         
@@ -451,6 +453,7 @@ async def deploy_agent(
         
         return AgentDeployResponse(
             agent_id=str(db_agent_id),
+            db_id=str(db_agent_id),  # Same as agent_id, this is the Supabase UUID
             status="created",
             agent0_id=None,
             metadata=response_metadata,
