@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import NegotiationModal from "./NegotiationModal";
 
 interface Product {
   id: string;
@@ -13,16 +14,37 @@ interface Product {
   images?: string[]; // Array of image URLs
 }
 
+interface Agent {
+  id: string;
+  name: string;
+  agent_type: string;
+  category?: string;
+}
+
 interface ProductsModalProps {
   isOpen: boolean;
   onClose: () => void;
   agentName: string;
+  merchantAgentId: string;
+  merchantCategory?: string;
+  myClientAgents: Agent[]; // User's client agents
   products: Product[];
   loading?: boolean;
 }
 
-export default function ProductsModal({ isOpen, onClose, agentName, products, loading = false }: ProductsModalProps) {
+export default function ProductsModal({ 
+  isOpen, 
+  onClose, 
+  agentName, 
+  merchantAgentId,
+  merchantCategory,
+  myClientAgents,
+  products, 
+  loading = false 
+}: ProductsModalProps) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -169,8 +191,14 @@ export default function ProductsModal({ isOpen, onClose, agentName, products, lo
                   </div>
 
                   {/* Action Button */}
-                  <button className="w-full mt-4 py-2 border border-cyan-400/50 rounded-lg text-cyan-400 hover:border-cyan-400 hover:bg-cyan-400/10 transition-all text-sm font-semibold">
-                    Negotiate
+                  <button 
+                    onClick={() => {
+                      setSelectedProduct(product);
+                      setShowNegotiationModal(true);
+                    }}
+                    className="w-full mt-4 py-2 border-2 border-cyan-400/50 rounded-lg text-cyan-400 hover:border-cyan-400 hover:bg-cyan-400/10 transition-all text-sm font-bold"
+                  >
+                    🤝 Start Negotiation
                   </button>
                 </div>
               )})}
@@ -178,6 +206,26 @@ export default function ProductsModal({ isOpen, onClose, agentName, products, lo
           )}
         </div>
       </div>
+
+      {/* Negotiation Modal - Now includes agent selection inside */}
+      {showNegotiationModal && selectedProduct && (
+        <NegotiationModal
+          isOpen={showNegotiationModal}
+          onClose={() => {
+            setShowNegotiationModal(false);
+            setSelectedProduct(null);
+          }}
+          merchantAgentId={merchantAgentId}
+          productId={selectedProduct.id}
+          productName={selectedProduct.name}
+          productPrice={parseFloat(selectedProduct.price)}
+          merchantCategory={merchantCategory}
+          myClientAgents={myClientAgents}
+          onNegotiationStart={() => {
+            console.log("Negotiation started for", selectedProduct.name);
+          }}
+        />
+      )}
     </div>
   );
 }

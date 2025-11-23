@@ -100,7 +100,8 @@ async def get_agent_pixel_claims(agent_id: str):
 async def claim_pixels(request: ClaimPixelsRequest):
     """
     Claim pixels for an agent.
-    Validates availability and max limit (50 pixels).
+    Validates availability and max limit (150 pixels total per agent).
+    Prevents race conditions with database UNIQUE constraint on (x, y).
     """
     try:
         supabase = get_supabase_client()

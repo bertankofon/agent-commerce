@@ -73,7 +73,7 @@ export default function MarketPage() {
       router.push('/');
       return;
     }
-    loadData();
+    loadInitialData();
   }, [authenticated, user]);
 
   useEffect(() => {
@@ -86,53 +86,52 @@ export default function MarketPage() {
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
-  async function loadData() {
-    const isInitialLoad = loading;
-    
-    if (isInitialLoad) {
-      setLoading(true);
-    } else {
-      setPixelsLoading(true);
-    }
-    
+  // Initial load: Load ALL data at once so agents are ready for negotiation
+  async function loadInitialData() {
+    setLoading(true);
     setError("");
     
     try {
-      // Load data based on active tab for faster initial load
-      if (activeTab === 'pixel-map') {
-        // Only load pixel claims for pixel map tab
-        const pixelData = await getAllPixelClaims();
-        setPixelClaims(pixelData.pixels || []);
-      } else {
-        // Load agents data in parallel
-        const promises: Promise<any>[] = [
-          getLiveAgents().then(data => setMarketAgents(data.agents || []))
-        ];
-        
-        if (user?.wallet?.address) {
-          promises.push(
-            getMyAgents(user.wallet.address).then(data => setMyAgents(data.agents || []))
-          );
-        }
-        
-        await Promise.all(promises);
+      // Load everything in parallel for instant access
+      const promises: Promise<any>[] = [
+        getAllPixelClaims().then(data => setPixelClaims(data.pixels || [])),
+        getLiveAgents().then(data => setMarketAgents(data.agents || []))
+      ];
+      
+      if (user?.wallet?.address) {
+        promises.push(
+          getMyAgents(user.wallet.address).then(data => setMyAgents(data.agents || []))
+        );
       }
+      
+      await Promise.all(promises);
     } catch (err: any) {
-      console.error("Failed to load agents:", err);
-      setError("Failed to load agents");
+      console.error("Failed to load data:", err);
+      setError("Failed to load data");
     } finally {
-      if (isInitialLoad) {
-        setLoading(false);
-      } else {
-        setPixelsLoading(false);
-      }
+      setLoading(false);
     }
   }
 
-  // Load data when tab changes (except initial load)
+  // Reload only pixels when switching to pixel-map tab
+  async function reloadPixels() {
+    if (pixelClaims.length > 0) return; // Already loaded
+    
+    setPixelsLoading(true);
+    try {
+      const pixelData = await getAllPixelClaims();
+      setPixelClaims(pixelData.pixels || []);
+    } catch (err: any) {
+      console.error("Failed to reload pixels:", err);
+    } finally {
+      setPixelsLoading(false);
+    }
+  }
+
+  // Reload pixels when tab changes to pixel-map (if needed)
   useEffect(() => {
-    if (authenticated && !loading) {
-      loadData();
+    if (authenticated && !loading && activeTab === 'pixel-map') {
+      reloadPixels();
     }
   }, [activeTab]);
 
@@ -140,7 +139,19 @@ export default function MarketPage() {
     try {
       const newStatus = currentStatus === 'live' ? 'paused' : 'live';
       await updateAgentStatus(agentId, newStatus);
-      await loadData(); // Reload
+      
+      // Reload only agents, not pixels
+      const promises: Promise<any>[] = [
+        getLiveAgents().then(data => setMarketAgents(data.agents || []))
+      ];
+      
+      if (user?.wallet?.address) {
+        promises.push(
+          getMyAgents(user.wallet.address).then(data => setMyAgents(data.agents || []))
+        );
+      }
+      
+      await Promise.all(promises);
     } catch (err: any) {
       console.error("Failed to update status:", err);
       setError("Failed to update agent status");
@@ -428,18 +439,18 @@ export default function MarketPage() {
                     </p>
                   )}
 
-                  {/* Pixel Grid - Centered, Extra Large */}
+                  {/* Pixel Grid - Centered, Extra Large (75x30) */}
                   <div className="border-2 border-cyan-400/30 rounded-xl p-6 bg-black/50 backdrop-blur-sm">
                     <div 
                       className="grid gap-0"
                       style={{
-                        gridTemplateColumns: `repeat(50, 20px)`,
+                        gridTemplateColumns: `repeat(75, 20px)`,
                         width: "fit-content"
                       }}
                     >
-                        {Array.from({ length: 50 * 20 }, (_, i) => {
-                          const x = i % 50;
-                          const y = Math.floor(i / 50);
+                        {Array.from({ length: 75 * 30 }, (_, i) => {
+                          const x = i % 75;
+                          const y = Math.floor(i / 75);
                           const key = `${x},${y}`;
                           const claim = pixelClaimsMap.get(key);
                           const isSelected = selectedPixelsSet.has(key);
@@ -447,24 +458,24 @@ export default function MarketPage() {
                           
                           let bgColor = "#0a0a0a";
                           let borderColor = "#1a1a1a";
-                          let opacity = 0.3;
+                          let opacity = 0.2;
                           let cursor = "default";
                           
                           if (claim && claim.agents) {
                             bgColor = getCategoryColor(claim.agents.category || 'TECH');
                             borderColor = bgColor;
-                            opacity = 0.8;
+                            opacity = 0.5; // Daha soft, UI'a uyumlu
                             cursor = isSelectingPixels ? "not-allowed" : "pointer";
                           } else if (isSelectingPixels) {
                             cursor = "crosshair";
                             if (isSelected) {
-                              bgColor = "#00D9FF";
-                              borderColor = "#00D9FF";
-                              opacity = 0.7;
+                              bgColor = "#0891B2"; // UI cyan
+                              borderColor = "#0891B2";
+                              opacity = 0.6;
                             } else if (isInDrag) {
-                              bgColor = "#00D9FF";
-                              borderColor = "#00D9FF";
-                              opacity = 0.4;
+                              bgColor = "#0891B2"; // UI cyan
+                              borderColor = "#0891B2";
+                              opacity = 0.3;
                             }
                           }
                           
@@ -714,6 +725,9 @@ export default function MarketPage() {
         isOpen={showProductsModal}
         onClose={handleCloseModal}
         agentName={selectedAgent?.name || ""}
+        merchantAgentId={selectedAgent?.id || ""}
+        merchantCategory={selectedAgent?.category}
+        myClientAgents={myAgents.filter(a => a.agent_type === 'client')}
         products={loadingProducts ? [] : products}
       />
     </div>

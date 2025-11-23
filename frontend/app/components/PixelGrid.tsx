@@ -16,7 +16,8 @@ interface PixelClaim {
 
 interface PixelGridProps {
   claims: PixelClaim[];
-  gridSize?: number;
+  gridWidth?: number;
+  gridHeight?: number;
   pixelSize?: number;
   onPixelClick?: (claim: PixelClaim | null, x: number, y: number) => void;
   onPixelHover?: (claim: PixelClaim | null, x: number, y: number) => void;
@@ -24,7 +25,8 @@ interface PixelGridProps {
 
 export default function PixelGrid({
   claims,
-  gridSize = 50,
+  gridWidth = 75,
+  gridHeight = 30,
   pixelSize = 12,
   onPixelClick,
   onPixelHover,
@@ -75,20 +77,20 @@ export default function PixelGrid({
 
     let backgroundColor = "#0a0a0a"; // Empty pixel
     let borderColor = "#1a1a1a";
-    let opacity = 0.3;
+    let opacity = 0.2;
 
     if (claim) {
       const category = claim.agents?.category || "TECH";
       backgroundColor = getCategoryColor(category);
-      opacity = 0.7;
+      opacity = 0.45; // Daha soft ton
       borderColor = backgroundColor;
 
       if (isSelectedAgent) {
-        opacity = 1;
+        opacity = 0.7; // Selected daha belirgin ama yine de soft
       }
 
       if (isHovered) {
-        opacity = 0.9;
+        opacity = 0.6; // Hover da soft
       }
     }
 
@@ -122,13 +124,13 @@ export default function PixelGrid({
       <div
         className="grid gap-0 border-2 border-cyan-400/20 rounded-lg p-2 bg-black/50"
         style={{
-          gridTemplateColumns: `repeat(${gridSize}, ${pixelSize}px)`,
+          gridTemplateColumns: `repeat(${gridWidth}, ${pixelSize}px)`,
           width: "fit-content",
         }}
       >
-        {Array.from({ length: gridSize * gridSize }, (_, i) => {
-          const x = i % gridSize;
-          const y = Math.floor(i / gridSize);
+        {Array.from({ length: gridWidth * gridHeight }, (_, i) => {
+          const x = i % gridWidth;
+          const y = Math.floor(i / gridWidth);
           return renderPixel(x, y);
         })}
       </div>

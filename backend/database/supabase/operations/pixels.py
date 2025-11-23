@@ -38,24 +38,16 @@ class PixelsOperations:
             ValueError: If any pixel is already claimed or out of bounds
         """
         try:
-            # Validate all pixels first (50x20 grid)
+            # Validate all pixels first (75x30 grid)
             for x, y in pixels:
-                if not (0 <= x < 50 and 0 <= y < 20):
-                    raise ValueError(f"Pixel ({x}, {y}) is out of bounds (0-49, 0-19)")
-                
-                # Check if pixel is already claimed
-                existing = self.client.table(self.table)\
-                    .select("id")\
-                    .eq("x", x)\
-                    .eq("y", y)\
-                    .execute()
-                
-                if existing.data:
-                    raise ValueError(f"Pixel ({x}, {y}) is already claimed")
+                if not (0 <= x < 75 and 0 <= y < 30):
+                    raise ValueError(f"Pixel ({x}, {y}) is out of bounds (0-74, 0-29)")
             
-            # Check max 50 pixels limit
-            if len(pixels) > 50:
-                raise ValueError(f"Cannot claim more than 50 pixels (requested: {len(pixels)})")
+            # Check max 150 pixels limit (for 75x30 grid)
+            current_claims = self.get_claims_by_agent(agent_id)
+            total_after_claim = len(current_claims) + len(pixels)
+            if total_after_claim > 150:
+                raise ValueError(f"Cannot claim more than 150 pixels total (currently: {len(current_claims)}, requesting: {len(pixels)})")
             
             # Prepare data for batch insert
             claims_data = [
@@ -67,8 +59,11 @@ class PixelsOperations:
                 for x, y in pixels
             ]
             
-            # Insert all claims
-            response = self.client.table(self.table).insert(claims_data).execute()
+            # Insert all claims with upsert to handle race conditions
+            # The UNIQUE constraint on (x, y) will prevent duplicates at DB level
+            response = self.client.table(self.table)\
+                .insert(claims_data, upsert=False)\
+                .execute()
             
             if not response.data:
                 raise ValueError("Failed to claim pixels: no data returned")
@@ -125,14 +120,14 @@ class PixelsOperations:
         Check if a pixel is available for claiming.
         
         Args:
-            x: X coordinate (0-49)
-            y: Y coordinate (0-49)
+            x: X coordinate (0-74)
+            y: Y coordinate (0-29)
         
         Returns:
             True if available, False if already claimed
         """
         try:
-            if not (0 <= x < 50 and 0 <= y < 20):
+            if not (0 <= x < 75 and 0 <= y < 30):
                 return False
             
             response = self.client.table(self.table)\
@@ -182,7 +177,7 @@ class PixelsOperations:
             available = []
             for x in range(x_start, x_end + 1):
                 for y in range(y_start, y_end + 1):
-                    if 0 <= x < 50 and 0 <= y < 20 and (x, y) not in claimed_set:
+                    if 0 <= x < 75 and 0 <= y < 30 and (x, y) not in claimed_set:
                         available.append((x, y))
             
             return available
@@ -243,10 +238,10 @@ class PixelsOperations:
                 by_category[category] = by_category.get(category, 0) + pixel_count
             
             return {
-                "total_pixels": 1000,  # 50x20
+                "total_pixels": 2250,  # 75x30
                 "claimed_pixels": claimed_count,
-                "free_pixels": 1000 - claimed_count,
-                "utilization_percent": round((claimed_count / 1000) * 100, 2),
+                "free_pixels": 2250 - claimed_count,
+                "utilization_percent": round((claimed_count / 2250) * 100, 2),
                 "by_category": by_category
             }
             

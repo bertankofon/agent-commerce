@@ -59,15 +59,16 @@ class MerchantAgent:
             # Initialize memory for the agent
             memory = ChatMemoryBuffer.from_defaults()
 
-            # Initialize ReAct agent with negotiation_percentage in prompt (updated for llama-index >= 0.12.0)
+            # Initialize ReAct agent (direct instantiation for llama-index 0.14+)
             self.agent = ReActAgent(
+                name=agent_name,
+                description=f"AI merchant agent selling products with {negotiation_percentage}% max discount",
                 tools=self.tools,
                 llm=self.llm,
                 memory=memory,
-                verbose=True
+                verbose=True,
+                system_prompt=self._get_system_prompt(negotiation_percentage)
             )
-            # Set system prompt via property
-            self.agent.system_prompt = self._get_system_prompt(negotiation_percentage)
 
             logger.info(
                 f"MerchantAgent initialized: {agent_name} (ID: {agent_id})"

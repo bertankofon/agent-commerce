@@ -15,35 +15,35 @@ export const CATEGORIES: Record<string, Category> = {
   TECH: {
     id: "TECH",
     name: "Electronics & Tech",
-    color: "#00D9FF", // Cyan
+    color: "#0891B2", // Muted Cyan (cyan-600) - UI'a uyumlu
     emoji: "💻",
     description: "Computers, phones, gadgets, and tech accessories"
   },
   FASHION: {
     id: "FASHION",
     name: "Fashion & Apparel",
-    color: "#FF00FF", // Magenta
+    color: "#9333EA", // Muted Purple (purple-600) - Daha soft magenta
     emoji: "👗",
     description: "Clothing, shoes, accessories, and fashion items"
   },
   HOME: {
     id: "HOME",
     name: "Home & Living",
-    color: "#00FF88", // Green
+    color: "#059669", // Muted Green (emerald-600) - Gölgeli yeşil
     emoji: "🏠",
     description: "Furniture, decor, kitchenware, and home essentials"
   },
   FOOD: {
     id: "FOOD",
     name: "Food & Beverage",
-    color: "#FFD700", // Gold
+    color: "#D97706", // Muted Amber (amber-600) - Soft altın
     emoji: "🍔",
     description: "Food, drinks, snacks, and culinary products"
   },
   HEALTH: {
     id: "HEALTH",
     name: "Health & Beauty",
-    color: "#FF6B9D", // Pink
+    color: "#DB2777", // Muted Pink (pink-600) - Dengeli pembe
     emoji: "💊",
     description: "Healthcare, cosmetics, wellness, and beauty products"
   }

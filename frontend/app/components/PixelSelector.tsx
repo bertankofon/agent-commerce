@@ -8,7 +8,8 @@ interface PixelSelectorProps {
   selectedPixels: Array<{ x: number; y: number }>;
   onSelectionChange: (pixels: Array<{ x: number; y: number }>) => void;
   category: string;
-  gridSize?: number;
+  gridWidth?: number;
+  gridHeight?: number;
   pixelSize?: number;
   maxPixels?: number;
 }
@@ -18,9 +19,10 @@ export default function PixelSelector({
   selectedPixels,
   onSelectionChange,
   category,
-  gridSize = 50,
+  gridWidth = 75,
+  gridHeight = 30,
   pixelSize = 10,
-  maxPixels = 50,
+  maxPixels = 150,
 }: PixelSelectorProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -107,20 +109,20 @@ export default function PixelSelector({
 
     let backgroundColor = "#0a0a0a";
     let borderColor = "#1a1a1a";
-    let opacity = 0.3;
+    let opacity = 0.2;
     let cursor = "crosshair";
 
     if (isOccupied) {
       backgroundColor = "#666666";
-      opacity = 0.5;
+      opacity = 0.4;
       cursor = "not-allowed";
     } else if (isSelected) {
       backgroundColor = getCategoryColor(category);
-      opacity = 0.8;
+      opacity = 0.6; // Daha soft seçim
       borderColor = getCategoryColor(category);
     } else if (isInDrag && !isOccupied) {
       backgroundColor = getCategoryColor(category);
-      opacity = 0.5;
+      opacity = 0.4; // Daha soft drag preview
       borderColor = getCategoryColor(category);
     }
 
@@ -208,7 +210,7 @@ export default function PixelSelector({
       <div
         className="grid gap-0 border-2 border-cyan-400/30 rounded-lg p-2 bg-black/30 select-none"
         style={{
-          gridTemplateColumns: `repeat(${gridSize}, ${pixelSize}px)`,
+          gridTemplateColumns: `repeat(${gridWidth}, ${pixelSize}px)`,
           width: "fit-content",
         }}
         onMouseLeave={() => {
@@ -219,9 +221,9 @@ export default function PixelSelector({
           }
         }}
       >
-        {Array.from({ length: gridSize * gridSize }, (_, i) => {
-          const x = i % gridSize;
-          const y = Math.floor(i / gridSize);
+        {Array.from({ length: gridWidth * gridHeight }, (_, i) => {
+          const x = i % gridWidth;
+          const y = Math.floor(i / gridWidth);
           return renderPixel(x, y);
         })}
       </div>
@@ -238,6 +240,7 @@ export default function PixelSelector({
             style={{
               backgroundColor: getCategoryColor(category),
               borderColor: getCategoryColor(category),
+              opacity: 0.6,
             }}
           />
           <span>Your Selection</span>
