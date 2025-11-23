@@ -6,6 +6,7 @@ import re
 from typing import Dict, Any, List, Optional
 from llama_index.core.agent import ReActAgent
 from llama_index.core.tools import FunctionTool
+from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.llms.openai import OpenAI
 import os
 
@@ -52,13 +53,18 @@ class ShoppingAgent:
             # Create tools for the agent
             self.tools = self._create_tools()
 
-            # Initialize ReAct agent
-            self.agent = ReActAgent.from_tools(
+            # Initialize memory for the agent
+            memory = ChatMemoryBuffer.from_defaults()
+
+            # Initialize ReAct agent (updated for llama-index >= 0.12.0)
+            self.agent = ReActAgent(
                 tools=self.tools,
                 llm=self.llm,
-                verbose=True,
-                system_prompt=self._get_system_prompt()
+                memory=memory,
+                verbose=True
             )
+            # Set system prompt via property
+            self.agent.system_prompt = self._get_system_prompt()
 
             logger.info(f"ShoppingAgent initialized: {agent_name} (ID: {agent_id})")
 

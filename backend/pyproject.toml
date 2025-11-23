@@ -19,4 +19,5 @@ dependencies = [
     "supabase>=2.0.0",
     "uvicorn>=0.38.0",
     "web3>=7.14.0",
+    "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@main",
 ]

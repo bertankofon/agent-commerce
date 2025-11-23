@@ -4,14 +4,16 @@ services:
   backend:
     build:
       context: ..
-      dockerfile: backend/Dockerfile
+      dockerfile: backend/Dockerfile  # Uses Python 3.13-slim
     container_name: agent-commerce-backend
     ports:
       - "8000:8000"
     environment:
       - PORT=8000
-    volumes:
-      - ../agents:/app/agents
+    # volumes:
+      # Note: Agents are copied into image during build from backend/agents/
+      # If you need live reload during development, uncomment and use correct path:
+      # - ./agents:/app/agents
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]

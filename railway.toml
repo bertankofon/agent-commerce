@@ -1,0 +1,32 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+# Railway uses backend/ directory as root (build context)
+# The Dockerfile is updated to work from backend/ directory context
+# 
+# If deploying via Railway Dashboard:
+# - Set "Root Directory" to: backend/
+# - Dockerfile path: Dockerfile (relative to backend/)
+#
+# If deploying via Railway CLI:
+# - Run `railway up` from the backend/ directory
+# - Example: cd /path/to/agent-commerce/backend && railway up
+
+[deploy]
+# Railway will use the CMD from Dockerfile which uses PORT env var
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Note: Set these environment variables in Railway dashboard:
+# Required:
+# - SUPABASE_URL
+# - SUPABASE_SERVICE_ROLE_KEY
+# - OPENAI_API_KEY
+# - USER_SECRET_KEY
+# Optional:
+# - CHAOSCHAIN_NETWORK (default: BASE_SEPOLIA)
+# - BASE_SEPOLIA_RPC_URL
+# - PORT (automatically set by Railway)
+
