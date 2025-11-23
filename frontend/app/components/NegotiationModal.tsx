@@ -3,6 +3,14 @@
 import React, { useState, useEffect } from "react";
 import { getCategoryColor } from "../lib/categories";
 
+// Get backend URL from environment variable
+// Supports multiple possible variable names
+const API_BASE = 
+  process.env.NEXT_PUBLIC_NEXT_BACKEND_URL || 
+  process.env.NEXT_PUBLIC_next_backend_url ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  'http://localhost:8000';
+
 interface ChatMessage {
   id: string;
   round_number: number;
@@ -83,7 +91,7 @@ export default function NegotiationModal({
     try {
       setLoadingHistory(true);
       const response = await fetch(
-        `http://localhost:8000/negotiation/history/product/${productId}`
+        `${API_BASE}/negotiation/history/product/${productId}`
       );
       const data = await response.json();
       
@@ -109,7 +117,7 @@ export default function NegotiationModal({
       onNegotiationStart?.();
 
       const response = await fetch(
-        "http://localhost:8000/negotiation/single-negotiation",
+        `${API_BASE}/negotiation/single-negotiation`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -149,7 +157,7 @@ export default function NegotiationModal({
   const fetchLatestNegotiation = async (): Promise<Negotiation | null> => {
     try {
       const response = await fetch(
-        `http://localhost:8000/negotiation/history/product/${productId}`
+        `${API_BASE}/negotiation/history/product/${productId}`
       );
       const data = await response.json();
       

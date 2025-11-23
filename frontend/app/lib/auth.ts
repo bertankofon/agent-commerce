@@ -1,4 +1,15 @@
-const API_BASE = 'http://localhost:8000';
+// Get backend URL from environment variable
+// Supports multiple possible variable names
+const API_BASE = 
+  process.env.NEXT_PUBLIC_NEXT_BACKEND_URL || 
+  process.env.NEXT_PUBLIC_next_backend_url ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  'http://localhost:8000';
+
+// Debug: Log the API base URL (only in development)
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.log('API_BASE:', API_BASE);
+}
 
 export interface UserLoginData {
   privy_user_id: string;

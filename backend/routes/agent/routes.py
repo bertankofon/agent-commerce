@@ -384,27 +384,45 @@ async def deploy_agent(
                 # Create products
                 created_products = []
                 for idx, product in enumerate(products_data):
-                    # Try to get image for this product (product_image_0, product_image_1, etc.)
-                    image_key = f"product_image_{idx}"
                     product_image_urls = []
                     
-                    if image_key in form_data:
+                    # Look for multiple images per product: product_{idx}_image_{img_idx}
+                    # Also support legacy format: product_image_{idx} (for backward compatibility)
+                    image_keys = []
+                    
+                    # Check for new format: product_0_image_0, product_0_image_1, etc.
+                    for key in form_data.keys():
+                        if key.startswith(f"product_{idx}_image_"):
+                            image_keys.append(key)
+                    
+                    # If no new format found, check legacy format
+                    if not image_keys:
+                        legacy_key = f"product_image_{idx}"
+                        if legacy_key in form_data:
+                            image_keys = [legacy_key]
+                    
+                    # Sort image keys to maintain order (product_0_image_0, product_0_image_1, etc.)
+                    image_keys.sort()
+                    
+                    # Upload each image
+                    for img_idx, image_key in enumerate(image_keys):
                         image_file = form_data[image_key]
                         if isinstance(image_file, UploadFile) and image_file.filename:
-                            logger.info(f"Found image for product {idx}: {image_file.filename}")
+                            logger.info(f"Found image {img_idx} for product {idx}: {image_file.filename}")
                             
                             # Upload image to Supabase Storage
                             image_url = await upload_product_image(
                                 image_file,
                                 str(db_agent_id),
-                                idx
+                                idx,
+                                img_idx  # Pass image index
                             )
                             
                             if image_url:
                                 product_image_urls.append(image_url)
-                                logger.info(f"✓ Product {idx} image uploaded: {image_url}")
+                                logger.info(f"✓ Product {idx} image {img_idx} uploaded: {image_url}")
                             else:
-                                logger.warning(f"Failed to upload image for product {idx}")
+                                logger.warning(f"Failed to upload image {img_idx} for product {idx}")
                     
                     # Insert product into database
                     created_product = products_ops.create_product(
@@ -413,7 +431,7 @@ async def deploy_agent(
                         price=str(product["price"]),
                         stock=product["stock"],
                         negotiation_percentage=product.get("maxDiscount", 0),
-                        images=product_image_urls  # Pass image URLs array
+                        images=product_image_urls  # Pass all image URLs array
                     )
                     created_products.append(created_product)
                     logger.info(f"✓ Product '{product['name']}' created with {len(product_image_urls)} image(s)")

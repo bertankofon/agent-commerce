@@ -29,13 +29,38 @@ app = FastAPI(
 )
 
 # Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+# Get allowed origins from environment variable or use defaults
+allowed_origins_env = os.getenv("CORS_ORIGINS", "")
+cors_allow_all = os.getenv("CORS_ALLOW_ALL", "true").lower() == "true"  # Default to true for development
+
+if allowed_origins_env:
+    # Parse comma-separated origins from environment variable
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",")]
+elif cors_allow_all:
+    # Allow all origins (useful for development and Railway deployments)
+    allowed_origins = ["*"]
+else:
+    # Default origins for development
+    allowed_origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",  # Vite default port
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ]
+
+logger.info(f"CORS configured with origins: {allowed_origins}")
+
+# When allow_origins=["*"], allow_credentials must be False (CORS security restriction)
+allow_credentials = "*" not in allowed_origins
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

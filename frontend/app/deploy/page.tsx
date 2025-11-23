@@ -14,8 +14,7 @@ interface Product {
   price: number;
   stock: number;
   maxDiscount: number;
-  imageUrl?: string;
-  imageFile?: File;
+  imageFiles?: File[];
 }
 
 interface SearchItem {
@@ -94,6 +93,7 @@ export default function DeployPage() {
         price: 1000,
         stock: 100,
         maxDiscount: 15,
+        imageFiles: [],
       },
     ]);
   }
@@ -175,17 +175,18 @@ export default function DeployPage() {
           name: p.name,
           price: p.price,
           stock: p.stock,
-          maxDiscount: p.maxDiscount,
-          imageUrl: p.imageUrl || ""
+          maxDiscount: p.maxDiscount
         }));
         formData.append("products_json", JSON.stringify(productsData));
         formData.append("category", merchantCategory);
         
-        // Append product images separately
+        // Append product images separately with new format: product_{index}_image_{imageIndex}
         products.forEach((product, index) => {
-          if (product.imageFile) {
-            formData.append(`product_image_${index}`, product.imageFile);
-            formData.append(`product_image_${index}_id`, product.id);
+          if (product.imageFiles && product.imageFiles.length > 0) {
+            product.imageFiles.forEach((imageFile, imgIndex) => {
+              formData.append(`product_${index}_image_${imgIndex}`, imageFile);
+            });
+            formData.append(`product_${index}_id`, product.id);
           }
         });
       } else {
@@ -600,74 +601,86 @@ export default function DeployPage() {
                                 min="0"
                               />
                             </div>
-                            {/* Product Image Upload - Simple Method */}
+                            {/* Product Image Upload - Multiple Images */}
                             <div className="col-span-2">
                               <label className="block text-cyan-300/60 text-xs mb-2 font-semibold">
-                                PRODUCT IMAGE (OPTIONAL)
+                                PRODUCT IMAGES (OPTIONAL)
                               </label>
                               
-                              {/* Show preview if image selected */}
-                              {product.imageFile && (
-                                <div className="mb-3">
-                                  <div className="relative inline-block">
-                                    <img
-                                      src={URL.createObjectURL(product.imageFile)}
-                                      alt="Preview"
-                                      className="w-32 h-32 object-cover rounded-lg border-2 border-cyan-400/50"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        updateProduct(product.id, "imageFile", undefined);
-                                      }}
-                                      className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg transition-all"
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                  <p className="text-cyan-400/60 text-xs mt-2">
-                                    {product.imageFile.name} ({(product.imageFile.size / 1024).toFixed(1)} KB)
-                                  </p>
+                              {/* Show previews for all images */}
+                              {product.imageFiles && product.imageFiles.length > 0 && (
+                                <div className="mb-3 space-y-2">
+                                  {product.imageFiles.map((file, imgIdx) => (
+                                    <div key={imgIdx} className="relative inline-block group">
+                                      <img
+                                        src={URL.createObjectURL(file)}
+                                        alt={`Preview ${imgIdx + 1}`}
+                                        className="w-32 h-32 object-cover rounded-lg border-2 border-cyan-400/50"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newFiles = product.imageFiles?.filter((_, i) => i !== imgIdx) || [];
+                                          updateProduct(product.id, "imageFiles", newFiles);
+                                        }}
+                                        className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                                      >
+                                        ✕
+                                      </button>
+                                      <p className="text-cyan-400/60 text-xs mt-1">
+                                        {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                                      </p>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                               
                               {/* Upload button */}
-                              {!product.imageFile && (
-                                <div>
-                                  <input
-                                    type="file"
-                                    id={`img-${product.id}`}
-                                    accept="image/*"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) {
+                              <div>
+                                <input
+                                  type="file"
+                                  id={`img-${product.id}`}
+                                  accept="image/*"
+                                  multiple
+                                  onChange={(e) => {
+                                    const files = Array.from(e.target.files || []);
+                                    if (files.length > 0) {
+                                      // Validate all files
+                                      const validFiles: File[] = [];
+                                      for (const file of files) {
                                         // Check file size (5MB max)
                                         if (file.size > 5 * 1024 * 1024) {
-                                          alert("Image must be less than 5MB");
-                                          return;
+                                          alert(`${file.name} is too large. Image must be less than 5MB`);
+                                          continue;
                                         }
                                         // Check file type
                                         if (!file.type.startsWith('image/')) {
-                                          alert("Please select an image file");
-                                          return;
+                                          alert(`${file.name} is not an image file`);
+                                          continue;
                                         }
-                                        updateProduct(product.id, "imageFile", file);
+                                        validFiles.push(file);
                                       }
-                                    }}
-                                    className="hidden"
-                                  />
-                                  <label
-                                    htmlFor={`img-${product.id}`}
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-400/10 border-2 border-cyan-400/40 rounded-xl text-cyan-400 hover:bg-cyan-400/20 hover:border-cyan-400 transition-all cursor-pointer font-semibold text-sm"
-                                  >
-                                    <span className="text-lg">📷</span>
-                                    Choose Image
-                                  </label>
-                                  <p className="text-cyan-400/40 text-xs mt-2">
-                                    Max 5MB • JPG, PNG, WEBP, GIF
-                                  </p>
-                                </div>
-                              )}
+                                      
+                                      // Append to existing images or set new array
+                                      const existingFiles = product.imageFiles || [];
+                                      updateProduct(product.id, "imageFiles", [...existingFiles, ...validFiles]);
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                                <label
+                                  htmlFor={`img-${product.id}`}
+                                  className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-400/10 border-2 border-cyan-400/40 rounded-xl text-cyan-400 hover:bg-cyan-400/20 hover:border-cyan-400 transition-all cursor-pointer font-semibold text-sm"
+                                >
+                                  <span className="text-lg">📷</span>
+                                  {product.imageFiles && product.imageFiles.length > 0 
+                                    ? `Add More Images (${product.imageFiles.length} selected)`
+                                    : "Choose Images"}
+                                </label>
+                                <p className="text-cyan-400/40 text-xs mt-2">
+                                  Max 5MB each • JPG, PNG, WEBP, GIF • Multiple images allowed
+                                </p>
+                              </div>
                             </div>
                           </div>
                         </div>
