@@ -289,14 +289,8 @@ async def execute_payment_for_deal(
             merchant_public_address=merchant_public_address
         )
         
-        # Cleanup temp wallet files
-        try:
-            if hasattr(client_sdk, '_temp_wallet_file') and os.path.exists(client_sdk._temp_wallet_file):
-                os.remove(client_sdk._temp_wallet_file)
-            if hasattr(merchant_sdk, '_temp_wallet_file') and os.path.exists(merchant_sdk._temp_wallet_file):
-                os.remove(merchant_sdk._temp_wallet_file)
-        except Exception as e:
-            logger.warning(f"Failed to cleanup temp wallet files: {str(e)}")
+        # SDK now manages wallets internally via external_private_key
+        # No temp files to clean up!
         
         return payment_result
         

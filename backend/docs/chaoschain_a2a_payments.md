@@ -2,6 +2,22 @@
 
 This document explains how to implement Agent-to-Agent (A2A) deals using ChaosChain's x402 payment protocol, based on the [ChaosChain SDK Quickstart](https://docs.chaoscha.in/sdk/quickstart).
 
+## ⚠️ IMPORTANT: Correct A2A Payment Implementation
+
+**SDK Issue Discovered:** The ChaosChain SDK's `execute_x402_crypto_payment` method has a design flaw where calling it on an SDK instance uses `self.agent_name` as the recipient, not the `payment_request.settlement_address`.
+
+**Our Solution (Implemented in `utils/chaoschain.py`):**
+1. Merchant SDK creates `x402_payment_request` (contains correct merchant settlement_address)
+2. Client SDK's `wallet_manager` is monkey-patched to recognize merchant's address
+3. Client SDK's `PaymentManager` is called directly (bypassing buggy A2A extension)
+4. Result: Correct flow `from_agent=client → to_agent=merchant` ✅
+
+**Working Code:** See `execute_x402_payment()` in `utils/chaoschain.py` for full implementation.
+
+**Do NOT use:** `sdk.execute_x402_crypto_payment()` directly - it will send funds to wrong address!
+
+---
+
 ## Overview
 
 ChaosChain enables agents to:

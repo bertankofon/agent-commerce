@@ -4,7 +4,12 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 
-from .models import NegotiateAndPayRequest, NegotiateAndPayResponse
+from .models import (
+    NegotiateAndPayRequest,
+    NegotiateAndPayResponse,
+    SingleNegotiationRequest,
+    SingleNegotiationResponse
+)
 from database.supabase.operations import AgentsOperations
 from database.supabase.client import get_supabase_client
 from utils.wallet import decrypt_pk
@@ -18,6 +23,21 @@ logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Helper Functions for Negotiate and Pay
+# ============================================================================
+#
+# PAYMENT IMPLEMENTATION NOTES:
+# -----------------------------
+# The ChaosChain SDK's A2A-x402 extension has a design issue where calling
+# `execute_x402_crypto_payment` on an SDK instance uses that instance's
+# agent_name as the recipient (to_agent).
+#
+# Our solution (implemented in utils/chaoschain.py):
+# 1. Merchant SDK creates the x402 payment request (has correct settlement_address)
+# 2. Client SDK's wallet_manager is monkey-patched to recognize merchant's address
+# 3. Client SDK's PaymentManager is called directly (bypassing A2A extension)
+# 4. This ensures: from_agent=client, to_agent=merchant (correct flow!)
+#
+# See execute_x402_payment() in utils/chaoschain.py for full implementation.
 # ============================================================================
 
 def validate_agent_id(agent_id: str) -> UUID:
@@ -193,13 +213,9 @@ def initialize_agent_sdks(
 
 
 def cleanup_temp_wallet_files(*sdks) -> None:
-    """Clean up temporary wallet files from SDKs."""
-    for sdk in sdks:
-        try:
-            if hasattr(sdk, '_temp_wallet_file') and os.path.exists(sdk._temp_wallet_file):
-                os.remove(sdk._temp_wallet_file)
-        except Exception as e:
-            logger.warning(f"Failed to cleanup temp wallet file: {str(e)}")
+    """Deprecated: SDK now manages wallets internally via external_private_key."""
+    # No cleanup needed - SDK handles wallet management
+    pass
 
 
 async def execute_payment_for_deal(
@@ -389,6 +405,157 @@ async def negotiate_and_pay(request: NegotiateAndPayRequest):
         raise
     except Exception as e:
         logger.error(f"Error in negotiate_and_pay endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.post("/single-negotiation", response_model=SingleNegotiationResponse)
+async def single_negotiation(request: SingleNegotiationRequest):
+    """
+    Direct negotiation between specific client and merchant agents.
+    
+    Flow:
+    1. Validate both agents exist
+    2. Get product details
+    3. Run 5-round negotiation between the two agents
+    4. Execute x402 payment if deal is successful
+    
+    Args:
+        request: SingleNegotiationRequest with client_id, merchant_id, product_id, budget
+    
+    Returns:
+        SingleNegotiationResponse with negotiation results and payment status
+    """
+    try:
+        # Validate agent IDs
+        client_agent_id = validate_agent_id(request.client_agent_id)
+        merchant_agent_id = validate_agent_id(request.merchant_agent_id)
+        
+        agents_ops = AgentsOperations()
+        
+        # Get and validate client agent
+        client_agent = validate_client_agent(client_agent_id, agents_ops)
+        
+        # Get merchant agent
+        merchant_agent = agents_ops.get_agent_by_id(merchant_agent_id)
+        if not merchant_agent:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Merchant agent {merchant_agent_id} not found"
+            )
+        
+        if merchant_agent.get("agent_type") != "merchant":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Agent {merchant_agent_id} is not a merchant agent"
+            )
+        
+        # Get product
+        supabase_client = get_supabase_client()
+        try:
+            product_uuid = UUID(request.product_id)
+            response = supabase_client.table("products")\
+                .select("*, agents(*)")\
+                .eq("id", str(product_uuid))\
+                .execute()
+            
+            products = response.data or []
+            if not products:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Product {request.product_id} not found"
+                )
+            
+            product = products[0]
+            
+            # Verify product belongs to merchant
+            if str(product.get("agent_id")) != str(merchant_agent_id):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product {request.product_id} does not belong to merchant {merchant_agent_id}"
+                )
+                
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid product_id format: {request.product_id}"
+            )
+        
+        logger.info(
+            f"Starting single negotiation: Client {client_agent_id} ↔ "
+            f"Merchant {merchant_agent_id} for product {product.get('name')}"
+        )
+        
+        # Run negotiation using shopping service
+        shopping_service = ShoppingService()
+        
+        negotiation_result = await shopping_service.start_shopping(
+            client_agent_id=client_agent_id,
+            product_query=product.get("name", ""),
+            budget=request.budget,
+            products=[product],
+            max_rounds=request.rounds or 5
+        )
+        
+        # Extract negotiation details
+        best_offer = negotiation_result.get("best_offer")
+        negotiation_history = negotiation_result.get("offers", [])
+        
+        # Prepare base response
+        response_data = {
+            "status": "completed",
+            "client_agent_id": str(client_agent_id),
+            "merchant_agent_id": str(merchant_agent_id),
+            "product_id": request.product_id,
+            "product_name": product.get("name"),
+            "initial_price": product.get("price"),
+            "final_price": best_offer.get("negotiated_price") if best_offer else None,
+            "agreed": best_offer.get("agreed", False) if best_offer else False,
+            "negotiation_rounds": negotiation_result.get("total_merchants_contacted", 0),
+            "negotiation_history": negotiation_history,
+            "payment_result": None,
+            "error": None
+        }
+        
+        # Execute payment if deal was successful and not dry run
+        if best_offer and best_offer.get("agreed") and not request.dry_run:
+            if best_offer.get("negotiated_price", float('inf')) <= request.budget:
+                logger.info(f"Executing payment for negotiated price: ${best_offer.get('negotiated_price'):.2f}")
+                
+                payment_result = await execute_payment_for_deal(
+                    client_agent=client_agent,
+                    merchant_agent=merchant_agent,
+                    best_offer=best_offer,
+                    dry_run=request.dry_run
+                )
+                
+                response_data["payment_result"] = payment_result
+                
+                if payment_result.get("status") == "success":
+                    response_data["status"] = "completed_with_payment"
+                else:
+                    response_data["status"] = "negotiation_success_payment_failed"
+            else:
+                response_data["status"] = "negotiation_success_over_budget"
+                response_data["error"] = f"Final price ${best_offer.get('negotiated_price'):.2f} exceeds budget ${request.budget:.2f}"
+        elif request.dry_run and best_offer and best_offer.get("agreed"):
+            response_data["status"] = "negotiation_success_dry_run"
+            response_data["payment_result"] = {
+                "status": "dry_run",
+                "message": "Payment skipped (dry run mode)"
+            }
+        elif not best_offer or not best_offer.get("agreed"):
+            response_data["status"] = "negotiation_failed"
+            response_data["error"] = "No agreement reached"
+        
+        return SingleNegotiationResponse(**response_data)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in single_negotiation endpoint: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
